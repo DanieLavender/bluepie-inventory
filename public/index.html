@@ -926,35 +926,98 @@
             .sidebar.open { transform: translateX(0); }
             .main-content { margin-left: 0; }
             .hamburger { display: flex; }
-            .topbar { padding: 0 16px; }
+
+            /* Topbar: 2줄 구조 */
+            .topbar {
+                height: auto;
+                min-height: var(--topbar-height);
+                padding: 8px 12px;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .topbar-left {
+                gap: 8px;
+                flex: 1;
+                min-width: 0;
+            }
+            .page-title { font-size: 15px; flex-shrink: 0; }
+            .sync-time { display: none; }
             .topbar-right { gap: 6px; }
-            .topbar-right .btn { padding: 7px 12px; font-size: 12px; }
-            .page-section { padding: 16px; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .stat-card { padding: 14px; }
-            .stat-icon { width: 38px; height: 38px; }
+            /* 모바일 상단바 버튼 최적화 */
+            .hide-mobile { display: none; }
+            .topbar-right #exportBtn { padding: 7px; }
+            .topbar-right #exportBtn svg { width: 18px; height: 18px; }
+            .topbar-right #addItemBtn { padding: 7px 10px; font-size: 12px; }
+            .topbar-right #refreshBtn { padding: 7px; }
+            .topbar-right #refreshBtn svg { width: 18px; height: 18px; }
+
+            .page-section { padding: 12px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .stat-card { padding: 12px; gap: 10px; }
+            .stat-icon { width: 36px; height: 36px; border-radius: 10px; }
             .stat-icon svg { width: 18px; height: 18px; }
-            .stat-value { font-size: 20px; }
+            .stat-value { font-size: 18px; }
+            .stat-label { font-size: 11px; }
+
             .toolbar { flex-direction: column; gap: 8px; }
             .search-box { min-width: unset; width: 100%; }
             .search-box input { font-size: 16px; padding: 12px 14px 12px 36px; }
             .filter-select { width: 100%; font-size: 16px; padding: 12px 32px 12px 12px; }
             .filter-count { order: -1; width: 100%; }
             .bulk-bar {
-                padding: 10px 16px;
+                padding: 10px 12px;
                 flex-wrap: wrap;
-                margin-bottom: 10px;
+                margin-bottom: 8px;
             }
 
             /* Hide table, show cards */
             .content-card table { display: none; }
             .card-list { display: block; }
 
-            .table-footer { flex-direction: column; gap: 10px; padding: 12px; }
+            /* 카드 내부 최적화 */
+            .card-item { padding: 8px 12px; }
+            .card-top { margin-bottom: 2px; }
+            .card-check { gap: 6px; }
+            .card-name {
+                font-size: 13px;
+                margin-bottom: 3px;
+                /* 2줄까지 표시 */
+                white-space: normal;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            .card-bottom { gap: 8px; }
+            .card-color-text {
+                font-size: 12px;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            /* 모바일 수량 그룹 터치 최적화 */
+            .card-actions .qty-group { border-radius: 6px; }
+            .card-actions .qty-btn {
+                width: 32px !important;
+                height: 32px !important;
+                font-size: 16px;
+            }
+            .card-actions .qty-value {
+                min-width: 32px;
+                font-size: 14px;
+                padding: 4px 2px;
+            }
+            .card-actions .more-btn {
+                width: 32px !important;
+                height: 32px !important;
+            }
+
+            .table-footer { flex-direction: column; gap: 8px; padding: 10px 12px; }
             .pagination { flex-wrap: wrap; justify-content: center; }
             .page-btn { min-height: 36px; min-width: 36px; }
 
-            .modal { padding: 24px 20px; width: 95vw; max-width: 95vw; }
+            .modal { padding: 24px 16px; width: 95vw; max-width: 95vw; }
             .modal h2 { font-size: 17px; }
             .form-group input, .form-group select { font-size: 16px; padding: 12px; }
             .modal-actions { flex-direction: column; }
@@ -962,19 +1025,30 @@
 
             .toast { bottom: 16px; left: 16px; right: 16px; text-align: center; }
             .summary-cards { grid-template-columns: 1fr; }
-            .brand-card-grid { grid-template-columns: repeat(2, 1fr); }
+            .brand-card-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .setting-row { flex-direction: column; align-items: flex-start; gap: 8px; }
             .setting-row input[type="text"], .setting-row select { width: 100%; }
+            .shell-card { padding: 12px; }
+            .shell-table th, .shell-table td { padding: 8px 8px; font-size: 12px; }
+            /* 셸 테이블 가로 스크롤 */
+            .shell-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         }
 
         /* ===== 33. Responsive: Small ===== */
         @media (max-width: 380px) {
-            .stats-grid { gap: 8px; }
-            .stat-card { padding: 10px; gap: 10px; }
-            .stat-value { font-size: 18px; }
-            .stat-label { font-size: 11px; }
+            .stats-grid { gap: 6px; }
+            .stat-card { padding: 10px 8px; gap: 8px; }
+            .stat-icon { width: 32px; height: 32px; border-radius: 8px; }
+            .stat-icon svg { width: 16px; height: 16px; }
+            .stat-value { font-size: 16px; }
+            .stat-label { font-size: 10px; }
+            .page-title { font-size: 14px; }
+            .card-item { padding: 6px 10px; }
             .card-name { font-size: 12px; }
-            .page-title { font-size: 15px; }
+            .card-actions .qty-btn { width: 28px !important; height: 28px !important; font-size: 14px; }
+            .card-actions .qty-value { min-width: 26px; font-size: 13px; }
+            .brand-card-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .brand-card-item { padding: 12px; }
         }
     </style>
 </head>
@@ -1066,7 +1140,7 @@
                 <div class="topbar-right">
                     <button class="btn btn-outline" id="exportBtn" onclick="showToast('내보내기 기능 준비 중입니다.', 'info')">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        내보내기
+                        <span class="hide-mobile">내보내기</span>
                     </button>
                     <button class="btn btn-accent" id="addItemBtn" onclick="openAddModal()">+ 재고 추가</button>
                     <button class="btn btn-outline" id="refreshBtn" onclick="refreshAll()" title="새로고침">
