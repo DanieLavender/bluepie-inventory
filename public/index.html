@@ -139,7 +139,21 @@
         }
         .checkbox-col { width: 40px; text-align: center; }
         .checkbox-col input { width: 16px; height: 16px; cursor: pointer; }
-        .action-col { width: 80px; text-align: center; }
+        .action-col { width: 100px; text-align: center; }
+        .updated-badge {
+            display: inline-block;
+            font-size: 11px;
+            color: #888;
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 2px;
+        }
+        .updated-badge.recent {
+            color: #1a73e8;
+            background: #e8f0fe;
+            font-weight: 600;
+        }
         .refresh-bar {
             padding: 8px 40px;
             display: flex;
@@ -524,11 +538,12 @@
                         <th>상품명</th>
                         <th>컬러</th>
                         <th>수량</th>
+                        <th>수정일</th>
                         <th class="action-col">관리</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <tr><td colspan="7" class="loading">데이터를 불러오는 중...</td></tr>
+                    <tr><td colspan="8" class="loading">데이터를 불러오는 중...</td></tr>
                 </tbody>
             </table>
             <!-- Mobile Card View -->
@@ -683,6 +698,10 @@
                 const brandHtml = item.brand
                     ? `<span class="brand-badge" style="background:${brandColors[item.brand] || '#999'}">${item.brand}</span>`
                     : '-';
+                const upd = formatUpdatedAt(item.updated_at);
+                const updHtml = item.updated_at
+                    ? `<span class="updated-badge ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
+                    : '<span style="color:#ccc;font-size:12px;">-</span>';
                 return `<tr>
                     <td class="checkbox-col"><input type="checkbox" ${checked} onchange="toggleSelect(${item.id})"></td>
                     <td class="no-col">${num}</td>
@@ -696,6 +715,7 @@
                             <button class="qty-btn" onclick="changeQty(${item.id}, ${item.qty}, 1)">+</button>
                         </div>
                     </td>
+                    <td>${updHtml}</td>
                     <td class="action-col">
                         <button class="btn btn-danger btn-sm" onclick="confirmSingleDelete(${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}')" title="삭제">X</button>
                     </td>
@@ -710,6 +730,10 @@
                     ? `<span class="brand-badge" style="background:${brandColors[item.brand] || '#999'}">${item.brand}</span>`
                     : '';
                 const qtyColor = item.qty === 0 ? 'color:#dc3545' : '';
+                const upd = formatUpdatedAt(item.updated_at);
+                const updHtml = item.updated_at
+                    ? `<span class="updated-badge ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
+                    : '';
                 return `<div class="card-item">
                     <div class="card-top">
                         <div class="card-check">
@@ -717,6 +741,7 @@
                             <span class="card-no">#${num}</span>
                             <span class="card-brand">${brandHtml}</span>
                         </div>
+                        ${updHtml}
                     </div>
                     <div class="card-name">${escapeHtml(item.name)}</div>
                     <div class="card-color">${escapeHtml(item.color)}</div>
@@ -781,6 +806,32 @@
 
     function escapeAttr(str) {
         return (str || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
+    function formatUpdatedAt(dateStr) {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr + 'Z'); // UTC from SQLite
+        const now = new Date();
+        const diff = now - d;
+        const mins = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        let timeText;
+        if (mins < 1) timeText = '방금 전';
+        else if (mins < 60) timeText = `${mins}분 전`;
+        else if (hours < 24) timeText = `${hours}시간 전`;
+        else if (days < 7) timeText = `${days}일 전`;
+        else {
+            const mo = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mi = String(d.getMinutes()).padStart(2, '0');
+            timeText = `${mo}-${dd} ${hh}:${mi}`;
+        }
+
+        const isRecent = diff < 3600000; // 1시간 이내
+        return { timeText, isRecent };
     }
 
     // --- Selection ---

@@ -114,7 +114,7 @@ app.put('/api/inventory/:id', (req, res) => {
     if (qty === undefined || qty === null) {
       return res.status(400).json({ error: '수량을 입력해주세요.' });
     }
-    const result = db.prepare('UPDATE inventory SET qty = ? WHERE id = ?').run(Math.max(0, parseInt(qty) || 0), id);
+    const result = db.prepare('UPDATE inventory SET qty = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(Math.max(0, parseInt(qty) || 0), id);
     if (result.changes === 0) {
       return res.status(404).json({ error: '항목을 찾을 수 없습니다.' });
     }

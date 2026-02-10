@@ -20,9 +20,16 @@ function initDb() {
       color TEXT NOT NULL,
       qty INTEGER NOT NULL DEFAULT 0,
       brand TEXT DEFAULT '',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT NULL
     )
   `);
+
+  // Migrate: add updated_at if missing (for existing DBs)
+  const columns = db.prepare("PRAGMA table_info(inventory)").all();
+  if (!columns.find(c => c.name === 'updated_at')) {
+    db.exec("ALTER TABLE inventory ADD COLUMN updated_at DATETIME DEFAULT NULL");
+  }
 
   const count = db.prepare('SELECT COUNT(*) as cnt FROM inventory').get();
   if (count.cnt === 0) {
