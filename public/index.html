@@ -140,6 +140,74 @@
         .checkbox-col { width: 40px; text-align: center; }
         .checkbox-col input { width: 16px; height: 16px; cursor: pointer; }
         .action-col { width: 80px; text-align: center; }
+        .refresh-bar {
+            padding: 8px 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #e8f0fe;
+            border-bottom: 1px solid #d2e3fc;
+        }
+        .refresh-bar .refresh-time {
+            font-size: 13px;
+            color: #555;
+        }
+        .refresh-bar .refresh-time strong {
+            color: #1a73e8;
+            font-weight: 700;
+        }
+        .btn-refresh {
+            padding: 6px 16px;
+            border: 1px solid #1a73e8;
+            border-radius: 8px;
+            background: white;
+            color: #1a73e8;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-refresh:hover { background: #1a73e8; color: white; }
+        .btn-refresh.spinning .refresh-icon { animation: spin 0.8s linear infinite; }
+        .refresh-icon { display: inline-block; font-size: 14px; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .qty-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .qty-btn {
+            width: 26px;
+            height: 26px;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            background: #f8f9fa;
+            color: #333;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            line-height: 1;
+            padding: 0;
+        }
+        .qty-btn:hover { background: #1a73e8; color: white; border-color: #1a73e8; }
+        .qty-btn-minus:hover { background: #dc3545; border-color: #dc3545; }
+        .qty-value {
+            min-width: 32px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .qty-value:hover { background: #e8f0fe; }
         .modal-overlay {
             display: none;
             position: fixed;
@@ -257,6 +325,7 @@
         }
         @media (max-width: 768px) {
             .header { padding: 16px 20px; }
+            .refresh-bar { padding: 8px 20px; }
             .stats { padding: 16px 20px; }
             .controls { padding: 0 20px 16px; }
             .table-container { padding: 0 20px 20px; }
@@ -273,6 +342,13 @@
             <div class="date">실시간 재고관리 시스템</div>
         </div>
         <button class="btn btn-success" onclick="openAddModal()">+ 재고 추가</button>
+    </div>
+
+    <div class="refresh-bar">
+        <button class="btn-refresh" onclick="refreshAll()" id="refreshBtn">
+            <span class="refresh-icon">&#8635;</span> 새로고침
+        </button>
+        <span class="refresh-time">마지막 갱신: <strong id="refreshTime">-</strong></span>
     </div>
 
     <div class="stats">
@@ -487,7 +563,11 @@
                     <td>${escapeHtml(item.name)}</td>
                     <td>${escapeHtml(item.color)}</td>
                     <td class="${qtyClass}">
-                        <span id="qty-${item.id}" ondblclick="startEditQty(${item.id}, ${item.qty})">${item.qty}</span>
+                        <div class="qty-controls">
+                            <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)">-</button>
+                            <span class="qty-value" id="qty-${item.id}" onclick="startEditQty(${item.id}, ${item.qty})">${item.qty}</span>
+                            <button class="qty-btn" onclick="changeQty(${item.id}, ${item.qty}, 1)">+</button>
+                        </div>
                     </td>
                     <td class="action-col">
                         <button class="btn btn-danger btn-sm" onclick="confirmSingleDelete(${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}')" title="삭제">X</button>
@@ -578,15 +658,60 @@
         }
     }
 
-    // --- Inline Qty Edit ---
+    // --- Refresh ---
+    function updateRefreshTime() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const mo = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        document.getElementById('refreshTime').textContent = `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+    }
+
+    async function refreshAll() {
+        const btn = document.getElementById('refreshBtn');
+        btn.classList.add('spinning');
+        btn.disabled = true;
+        try {
+            await Promise.all([loadStats(), loadBrands(), loadData()]);
+            updateRefreshTime();
+            showToast('새로고침 완료', 'success');
+        } catch (e) {
+            showToast('새로고침 실패', 'error');
+        } finally {
+            btn.classList.remove('spinning');
+            btn.disabled = false;
+        }
+    }
+
+    // --- Qty Controls ---
+    async function changeQty(id, currentQty, delta) {
+        const newQty = Math.max(0, currentQty + delta);
+        if (newQty === currentQty && delta < 0) return;
+        try {
+            await api(`/api/inventory/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ qty: newQty })
+            });
+            loadStats();
+            loadData();
+            updateRefreshTime();
+        } catch (e) {
+            showToast('수량 변경 실패: ' + e.message, 'error');
+        }
+    }
+
     function startEditQty(id, currentQty) {
         const span = document.getElementById(`qty-${id}`);
         if (!span) return;
-        span.innerHTML = `<input type="number" class="edit-qty" value="${currentQty}" min="0"
+        span.outerHTML = `<input type="number" class="edit-qty" value="${currentQty}" min="0"
             onblur="saveQty(${id}, this.value)"
             onkeydown="if(event.key==='Enter')this.blur();"
             autofocus>`;
-        span.querySelector('input').focus();
+        const input = document.querySelector('.edit-qty');
+        if (input) { input.focus(); input.select(); }
     }
 
     async function saveQty(id, val) {
@@ -599,6 +724,7 @@
             showToast('수량이 변경되었습니다.', 'success');
             loadStats();
             loadData();
+            updateRefreshTime();
         } catch (e) {
             showToast('수량 변경 실패: ' + e.message, 'error');
             loadData();
@@ -707,6 +833,7 @@
     // --- Init ---
     async function init() {
         await Promise.all([loadStats(), loadBrands(), loadData()]);
+        updateRefreshTime();
     }
     init();
     </script>
