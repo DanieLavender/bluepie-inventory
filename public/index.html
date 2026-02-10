@@ -4,581 +4,1342 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>블루파이 재고관리</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ===== 1. CSS Variables ===== */
+        :root {
+            --accent: #2563EB;
+            --accent-hover: #1D4ED8;
+            --accent-light: #EFF6FF;
+            --accent-lighter: #DBEAFE;
+            --bg-primary: #FAFAFA;
+            --bg-card: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --sidebar-bg: #111;
+            --sidebar-text: #9CA3AF;
+            --sidebar-active-bg: rgba(255,255,255,0.08);
+            --sidebar-width: 240px;
+            --topbar-height: 56px;
+            --danger: #DC2626;
+            --danger-hover: #B91C1C;
+            --success: #16A34A;
+            --success-light: #F0FDF4;
+            --warning: #F59E0B;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 20px 60px rgba(0,0,0,0.15);
+        }
+
+        /* ===== 2. Reset & Base ===== */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
-            background: #f0f2f5;
-            color: #333;
-        }
-        .header {
-            background: linear-gradient(135deg, #1a73e8, #0d47a1);
-            color: white;
-            padding: 20px 40px;
+            font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Malgun Gothic', sans-serif;
+            font-size: 14px;
+            color: var(--text-primary);
+            background: var(--bg-primary);
             display: flex;
-            justify-content: space-between;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== 3. Sidebar ===== */
+        .sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background: var(--sidebar-bg);
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .sidebar-logo {
+            padding: 20px 20px 28px;
+            display: flex;
             align-items: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            gap: 12px;
         }
-        .header h1 { font-size: 24px; font-weight: 600; }
-        .header .date { font-size: 14px; opacity: 0.85; }
-        .stats {
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: var(--accent);
+            border-radius: 10px;
             display: flex;
-            gap: 20px;
-            padding: 20px 40px;
-            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+        }
+        .logo-icon svg { width: 20px; height: 20px; color: white; }
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+            letter-spacing: -0.5px;
+        }
+        .sidebar-nav { flex: 1; padding: 0 12px; }
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 16px 12px 8px;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.15s;
+            position: relative;
+            margin-bottom: 2px;
+        }
+        .nav-item:hover { background: var(--sidebar-active-bg); color: #E5E7EB; }
+        .nav-item.active {
+            background: var(--sidebar-active-bg);
+            color: white;
+        }
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 6px; bottom: 6px;
+            width: 3px;
+            background: var(--accent);
+            border-radius: 0 3px 3px 0;
+        }
+        .nav-item svg { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.7; }
+        .nav-item.active svg { opacity: 1; }
+        .nav-badge {
+            margin-left: auto;
+            background: var(--danger);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .sidebar-user {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 34px; height: 34px;
+            background: #374151;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #D1D5DB;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .user-name { color: #E5E7EB; font-size: 13px; font-weight: 600; }
+        .user-role { color: #6B7280; font-size: 11px; }
+
+        /* ===== 4. Sidebar Overlay (mobile) ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 45;
+        }
+        .sidebar-overlay.active { display: block; }
+
+        /* ===== 5. App Wrapper & Main ===== */
+        .app-wrapper { display: flex; width: 100%; }
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ===== 6. Topbar ===== */
+        .topbar {
+            height: var(--topbar-height);
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            position: sticky;
+            top: 0;
+            z-index: 30;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        .page-title { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+        .sync-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        .sync-time { font-size: 12px; color: var(--text-muted); }
+        .hamburger {
+            display: none;
+            width: 36px; height: 36px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+        }
+        .hamburger:hover { background: var(--border-light); }
+        .hamburger svg { width: 22px; height: 22px; }
+
+        /* ===== 7. Buttons ===== */
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .btn-accent { background: var(--accent); color: white; }
+        .btn-accent:hover { background: var(--accent-hover); }
+        .btn-primary { background: var(--text-primary); color: white; }
+        .btn-primary:hover { background: #374151; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: var(--danger-hover); }
+        .btn-outline {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .btn-outline:hover { background: var(--border-light); border-color: #D1D5DB; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-ghost {
+            background: none; border: none;
+            color: var(--text-secondary);
+            padding: 6px 10px;
+        }
+        .btn-ghost:hover { background: var(--border-light); color: var(--text-primary); }
+
+        /* ===== 8. Page Sections ===== */
+        .page-section { padding: 24px 28px; }
+
+        /* ===== 9. Stats Grid ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
         }
         .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px 28px;
-            flex: 1;
-            min-width: 180px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-        }
-        .stat-card .label { font-size: 13px; color: #888; margin-bottom: 6px; }
-        .stat-card .value { font-size: 28px; font-weight: 700; color: #1a73e8; }
-        .controls {
-            padding: 0 40px 20px;
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-light);
             display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
             align-items: center;
+            gap: 14px;
+            animation: fadeUp 0.4s ease forwards;
+            opacity: 0;
+        }
+        .stat-card:nth-child(1) { animation-delay: 0.05s; }
+        .stat-card:nth-child(2) { animation-delay: 0.1s; }
+        .stat-card:nth-child(3) { animation-delay: 0.15s; }
+        .stat-card:nth-child(4) { animation-delay: 0.2s; }
+        .stat-icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .stat-icon svg { width: 22px; height: 22px; }
+        .stat-icon-blue { background: var(--accent-light); color: var(--accent); }
+        .stat-icon-green { background: var(--success-light); color: var(--success); }
+        .stat-icon-purple { background: #F3E8FF; color: #7C3AED; }
+        .stat-icon-red { background: #FEF2F2; color: var(--danger); }
+        .stat-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+        .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* ===== 10. Toolbar ===== */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
         }
         .search-box {
             flex: 1;
-            min-width: 250px;
+            min-width: 220px;
             position: relative;
+        }
+        .search-box svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px; height: 16px;
+            color: var(--text-muted);
+            pointer-events: none;
         }
         .search-box input {
             width: 100%;
-            padding: 12px 16px 12px 42px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 14px;
+            padding: 9px 14px 9px 36px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: inherit;
             outline: none;
+            background: var(--bg-card);
             transition: border-color 0.2s;
         }
-        .search-box input:focus { border-color: #1a73e8; }
-        .search-box::before {
-            content: '\1F50D';
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 16px;
-        }
+        .search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
         .filter-select {
-            padding: 12px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 14px;
+            padding: 9px 32px 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: inherit;
             outline: none;
-            background: white;
+            background: var(--bg-card);
             cursor: pointer;
-            min-width: 140px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            min-width: 130px;
+            transition: border-color 0.2s;
         }
-        .filter-select:focus { border-color: #1a73e8; }
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+        .filter-select:focus { border-color: var(--accent); }
+        .filter-count {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
         }
-        .btn-primary { background: #1a73e8; color: white; }
-        .btn-primary:hover { background: #1557b0; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-danger:hover { background: #b02a37; }
-        .btn-success { background: #28a745; color: white; }
-        .btn-success:hover { background: #1e7e34; }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #565e64; }
-        .btn-sm { padding: 6px 14px; font-size: 13px; border-radius: 6px; }
-        .table-container { padding: 0 40px 40px; }
-        .table-wrap {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+
+        /* ===== 11. Content Card ===== */
+        .content-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-light);
             overflow: hidden;
         }
+
+        /* ===== 12. Table ===== */
         table { width: 100%; border-collapse: collapse; }
         thead th {
-            background: #f8f9fa;
-            padding: 14px 16px;
+            background: var(--bg-primary);
+            padding: 12px 14px;
             text-align: left;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            color: #555;
-            border-bottom: 2px solid #e9ecef;
-            position: sticky;
-            top: 0;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
         }
-        tbody tr { transition: background 0.15s; }
-        tbody tr:hover { background: #f0f7ff; }
+        tbody tr { transition: background 0.1s; }
+        tbody tr:hover { background: #F9FAFB; }
         tbody td {
-            padding: 12px 16px;
-            font-size: 14px;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-light);
+            vertical-align: middle;
         }
-        .no-col { color: #999; font-size: 13px; width: 60px; }
-        .qty-col { font-weight: 600; }
-        .qty-zero { color: #dc3545; }
+        .col-check { width: 44px; text-align: center; }
+        .col-no { width: 50px; color: var(--text-muted); font-size: 12px; }
+        .col-brand { width: 90px; }
+        .col-name { }
+        .col-color { width: 140px; }
+        .col-qty { width: 120px; }
+        .col-date { width: 130px; }
+        .col-more { width: 50px; text-align: center; }
+
+        /* ===== 13. Custom Checkbox ===== */
+        .custom-check {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border: 2px solid #D1D5DB;
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.15s;
+            vertical-align: middle;
+        }
+        .custom-check:checked {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .custom-check:checked::after {
+            content: '';
+            position: absolute;
+            left: 5px; top: 1px;
+            width: 5px; height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        .custom-check:hover { border-color: var(--accent); }
+
+        /* ===== 14. Brand Badges ===== */
         .brand-badge {
             display: inline-block;
-            padding: 2px 8px;
+            padding: 3px 8px;
             border-radius: 4px;
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             color: white;
-            min-width: 28px;
+            min-width: 30px;
             text-align: center;
         }
-        .checkbox-col { width: 40px; text-align: center; }
-        .checkbox-col input { width: 16px; height: 16px; cursor: pointer; }
-        .action-col { width: 100px; text-align: center; }
-        .updated-badge {
-            display: inline-block;
-            font-size: 11px;
-            color: #888;
-            background: #f5f5f5;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-top: 2px;
-        }
-        .updated-badge.recent {
-            color: #1a73e8;
-            background: #e8f0fe;
-            font-weight: 600;
-        }
-        .refresh-bar {
-            padding: 8px 40px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: #e8f0fe;
-            border-bottom: 1px solid #d2e3fc;
-        }
-        .refresh-bar .refresh-time {
-            font-size: 13px;
-            color: #555;
-        }
-        .refresh-bar .refresh-time strong {
-            color: #1a73e8;
-            font-weight: 700;
-        }
-        .btn-refresh {
-            padding: 6px 16px;
-            border: 1px solid #1a73e8;
-            border-radius: 8px;
-            background: white;
-            color: #1a73e8;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
+        .brand-ag { background: #E91E63; }
+        .brand-ed { background: #9C27B0; }
+        .brand-hm { background: #3F51B5; }
+        .brand-ig { background: #00BCD4; }
+        .brand-it { background: #009688; }
+        .brand-lc { background: #4CAF50; }
+        .brand-ls { background: #8BC34A; }
+        .brand-mo { background: #FF9800; }
+        .brand-mu { background: #FF5722; }
+        .brand-mv { background: #795548; }
+        .brand-ov { background: #607D8B; }
+        .brand-ps { background: #E91E63; }
+        .brand-ru { background: #673AB7; }
+        .brand-sm { background: #2196F3; }
+        .brand-ve { background: #00897B; }
+        .brand-vi { background: #D81B60; }
+        .brand-default { background: #9CA3AF; }
+
+        /* ===== 15. Color Chip ===== */
+        .color-chip {
+            display: inline-flex;
             align-items: center;
             gap: 6px;
         }
-        .btn-refresh:hover { background: #1a73e8; color: white; }
-        .btn-refresh.spinning .refresh-icon { animation: spin 0.8s linear infinite; }
-        .refresh-icon { display: inline-block; font-size: 14px; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .qty-controls {
-            display: flex;
+        .color-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        /* ===== 16. Qty Controls ===== */
+        .qty-group {
+            display: inline-flex;
             align-items: center;
-            gap: 4px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
         }
         .qty-btn {
-            width: 26px;
-            height: 26px;
-            border: 1px solid #d0d0d0;
-            border-radius: 6px;
-            background: #f8f9fa;
-            color: #333;
-            font-size: 16px;
-            font-weight: 700;
+            width: 30px; height: 30px;
+            border: none;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.15s;
-            line-height: 1;
-            padding: 0;
+            font-family: inherit;
         }
-        .qty-btn:hover { background: #1a73e8; color: white; border-color: #1a73e8; }
-        .qty-btn-minus:hover { background: #dc3545; border-color: #dc3545; }
+        .qty-btn:hover { background: var(--accent); color: white; }
+        .qty-btn-minus:hover { background: var(--danger); color: white; }
         .qty-value {
-            min-width: 32px;
+            min-width: 36px;
             text-align: center;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
-            padding: 2px 4px;
-            border-radius: 4px;
+            padding: 4px 2px;
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            background: white;
         }
-        .qty-value:hover { background: #e8f0fe; }
+        .qty-value:hover { background: var(--accent-light); }
+        .qty-zero { color: var(--danger); }
+
+        /* ===== 17. Date Text ===== */
+        .date-text {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .date-text.recent {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* ===== 18. More Button ===== */
+        .more-btn {
+            width: 32px; height: 32px;
+            border: none;
+            background: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+        .more-btn:hover { background: var(--border-light); color: var(--text-primary); }
+        .more-btn svg { width: 18px; height: 18px; }
+
+        /* ===== 19. Dropdown Menu ===== */
+        .dropdown-menu {
+            display: none;
+            position: fixed;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-md);
+            min-width: 140px;
+            z-index: 100;
+            padding: 4px;
+        }
+        .dropdown-menu.active { display: block; }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: none;
+            width: 100%;
+            font-family: inherit;
+            transition: background 0.1s;
+        }
+        .dropdown-item:hover { background: var(--border-light); }
+        .dropdown-item svg { width: 16px; height: 16px; }
+        .dropdown-item-danger { color: var(--danger); }
+        .dropdown-item-danger:hover { background: #FEF2F2; }
+
+        /* ===== 20. Bulk Action Bar ===== */
+        .bulk-bar {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 28px;
+            background: var(--accent-light);
+            border: 1px solid var(--accent-lighter);
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+        }
+        .bulk-bar.active { display: flex; }
+        .bulk-bar span { font-size: 13px; font-weight: 600; color: var(--accent); }
+
+        /* ===== 21. Table Footer & Pagination ===== */
+        .table-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border-light);
+        }
+        .table-footer-info { font-size: 13px; color: var(--text-secondary); }
+        .pagination { display: flex; align-items: center; gap: 4px; }
+        .page-btn {
+            width: 32px; height: 32px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .page-btn:hover { background: var(--border-light); }
+        .page-btn.active {
+            background: var(--text-primary);
+            color: white;
+            border-color: var(--text-primary);
+        }
+        .page-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+        .page-btn svg { width: 16px; height: 16px; }
+        .page-ellipsis { padding: 0 4px; color: var(--text-muted); font-size: 13px; }
+
+        /* ===== 22. Empty State ===== */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state svg { width: 48px; height: 48px; color: var(--border); margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* ===== 23. Modals ===== */
         .modal-overlay {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 200;
             justify-content: center;
             align-items: center;
+            backdrop-filter: blur(2px);
         }
         .modal-overlay.active { display: flex; }
         .modal {
-            background: white;
-            border-radius: 16px;
-            padding: 32px;
-            width: 480px;
-            max-width: 90vw;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            width: 440px;
+            max-width: 92vw;
+            box-shadow: var(--shadow-lg);
+            animation: fadeUp 0.2s ease;
         }
-        .modal h2 { margin-bottom: 24px; font-size: 20px; }
-        .form-group { margin-bottom: 16px; }
+        .modal h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+        .form-group { margin-bottom: 14px; }
         .form-group label {
             display: block;
             font-size: 13px;
             font-weight: 600;
-            color: #555;
+            color: var(--text-secondary);
             margin-bottom: 6px;
         }
         .form-group input, .form-group select {
             width: 100%;
-            padding: 10px 14px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
             font-size: 14px;
+            font-family: inherit;
             outline: none;
             transition: border-color 0.2s;
         }
-        .form-group input:focus, .form-group select:focus { border-color: #1a73e8; }
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
         .modal-actions {
             display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 24px;
-        }
-        .bulk-actions {
-            padding: 10px 40px;
-            display: none;
-            align-items: center;
-            gap: 12px;
-            background: #fff3cd;
-            border-bottom: 1px solid #ffc107;
-        }
-        .bulk-actions.active { display: flex; }
-        .bulk-actions span { font-size: 14px; font-weight: 600; }
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
             gap: 8px;
-            padding: 20px;
+            justify-content: flex-end;
+            margin-top: 20px;
         }
-        .pagination button {
-            padding: 8px 14px;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            background: white;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        .pagination button:hover { background: #e9ecef; }
-        .pagination button.active {
-            background: #1a73e8;
+        .modal-actions .btn { padding: 10px 20px; }
+
+        /* ===== 24. Toast ===== */
+        .toast {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
             color: white;
-            border-color: #1a73e8;
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(12px);
+            transition: all 0.3s;
+            z-index: 300;
+            font-family: inherit;
+            box-shadow: var(--shadow-md);
         }
-        .pagination button:disabled { opacity: 0.5; cursor: default; }
-        .page-info { font-size: 13px; color: #666; }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #999;
-        }
-        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--danger); }
+        .toast-info { background: var(--accent); }
+
+        /* ===== 25. Edit Qty Input ===== */
         .edit-qty {
-            width: 60px;
-            padding: 4px 8px;
-            border: 2px solid #1a73e8;
-            border-radius: 6px;
-            font-size: 14px;
+            width: 56px;
+            padding: 4px 6px;
+            border: 2px solid var(--accent);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: inherit;
             text-align: center;
             outline: none;
         }
-        .toast {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            padding: 14px 24px;
-            border-radius: 10px;
-            color: white;
-            font-size: 14px;
-            font-weight: 500;
-            opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.3s;
-            z-index: 2000;
-        }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast-success { background: #28a745; }
-        .toast-error { background: #dc3545; }
-        .toast-info { background: #1a73e8; }
+
+        /* ===== 26. Loading ===== */
         .loading {
             text-align: center;
             padding: 40px;
-            color: #888;
-            font-size: 15px;
+            color: var(--text-muted);
+            font-size: 14px;
         }
-        /* ===== Mobile Card Layout ===== */
-        .card-list { display: none; }
 
+        /* ===== 27. Mobile Card Layout ===== */
+        .card-list { display: none; }
+        .card-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .card-item:last-child { border-bottom: none; }
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .card-check { display: flex; align-items: center; gap: 8px; }
+        .card-no { font-size: 11px; color: var(--text-muted); }
+        .card-name {
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.3;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .card-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-color-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .card-meta {
+            margin-top: 4px;
+        }
+
+        /* ===== 28. Shell Pages ===== */
+        .shell-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .shell-header h2 { font-size: 16px; font-weight: 600; }
+        .shell-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-light);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .shell-table { width: 100%; border-collapse: collapse; }
+        .shell-table th {
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-primary);
+        }
+        .shell-table td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .type-in { background: var(--success-light); color: var(--success); }
+        .type-out { background: #FEF2F2; color: var(--danger); }
+        .type-edit { background: var(--accent-light); color: var(--accent); }
+        .brand-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 14px;
+        }
+        .brand-card-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            text-align: center;
+        }
+        .brand-card-item .brand-badge { font-size: 14px; padding: 4px 12px; }
+        .brand-card-item .brand-card-stat {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 10px;
+        }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            text-align: center;
+        }
+        .summary-card .summary-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+        .summary-card .summary-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+        }
+        .setting-row label { font-size: 13px; color: var(--text-primary); }
+        .setting-row input[type="text"], .setting-row select {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: inherit;
+            width: 200px;
+        }
+        .toggle-switch {
+            width: 42px; height: 24px;
+            background: #D1D5DB;
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-switch.active { background: var(--accent); }
+        .toggle-switch::after {
+            content: '';
+            width: 20px; height: 20px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px; left: 2px;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-switch.active::after { transform: translateX(18px); }
+
+        /* ===== 29. Login Page ===== */
+        .login-page {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+        }
+        .login-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            width: 400px;
+            max-width: 92vw;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+        .login-card .logo-icon { margin: 0 auto 16px; width: 48px; height: 48px; }
+        .login-card .logo-icon svg { width: 28px; height: 28px; }
+        .login-card h1 { font-size: 22px; margin-bottom: 4px; }
+        .login-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; }
+        .login-card .form-group { text-align: left; }
+        .login-card .btn { width: 100%; justify-content: center; padding: 12px; font-size: 14px; }
+
+        /* ===== 30. Animations ===== */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning svg { animation: spin 0.8s linear infinite; }
+
+        /* ===== 31. Responsive: Tablet ===== */
+        @media (max-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .summary-cards { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ===== 32. Responsive: Mobile ===== */
         @media (max-width: 768px) {
-            .header {
-                padding: 14px 16px;
-                flex-direction: column;
-                gap: 12px;
-                align-items: stretch;
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
             }
-            .header .btn-success { width: 100%; text-align: center; padding: 14px; font-size: 15px; }
-            .refresh-bar {
-                padding: 8px 16px;
-                flex-wrap: wrap;
-            }
-            .btn-refresh { padding: 8px 14px; min-height: 40px; }
-            .refresh-bar .refresh-time { font-size: 12px; }
-            .stats {
-                padding: 12px 16px;
-                gap: 10px;
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-            }
-            .stat-card {
-                min-width: unset;
-                padding: 12px 14px;
-            }
-            .stat-card .label { font-size: 11px; }
-            .stat-card .value { font-size: 22px; }
-            .controls {
-                padding: 0 16px 12px;
-                flex-direction: column;
-                gap: 8px;
-            }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0; }
+            .hamburger { display: flex; }
+            .topbar { padding: 0 16px; }
+            .topbar-right { gap: 6px; }
+            .topbar-right .btn { padding: 7px 12px; font-size: 12px; }
+            .page-section { padding: 16px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .stat-card { padding: 14px; }
+            .stat-icon { width: 38px; height: 38px; }
+            .stat-icon svg { width: 18px; height: 18px; }
+            .stat-value { font-size: 20px; }
+            .toolbar { flex-direction: column; gap: 8px; }
             .search-box { min-width: unset; width: 100%; }
-            .search-box input { padding: 14px 16px 14px 42px; font-size: 16px; }
-            .filter-select {
-                width: 100%;
-                min-width: unset;
-                padding: 14px 16px;
-                font-size: 16px;
-            }
-            .bulk-actions {
+            .search-box input { font-size: 16px; padding: 12px 14px 12px 36px; }
+            .filter-select { width: 100%; font-size: 16px; padding: 12px 32px 12px 12px; }
+            .filter-count { order: -1; width: 100%; }
+            .bulk-bar {
                 padding: 10px 16px;
                 flex-wrap: wrap;
+                margin-bottom: 10px;
             }
-            .table-container { padding: 0 16px 20px; }
 
             /* Hide table, show cards */
-            .table-wrap table { display: none; }
+            .content-card table { display: none; }
             .card-list { display: block; }
 
-            .card-item {
-                background: white;
-                border-radius: 6px;
-                padding: 8px 10px;
-                margin-bottom: 4px;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-                border: 1px solid #f0f0f0;
-            }
-            .card-top {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 2px;
-            }
-            .card-top .card-check { display: flex; align-items: center; gap: 5px; }
-            .card-top .card-check input { width: 16px; height: 16px; }
-            .card-top .card-no { font-size: 10px; color: #999; }
-            .card-brand { margin-top: 0; }
-            .card-name {
-                font-size: 13px;
-                font-weight: 500;
-                line-height: 1.2;
-                margin-bottom: 2px;
-                color: #333;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-            .card-bottom {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            .card-color-text {
-                font-size: 12px;
-                color: #666;
-                flex-shrink: 1;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .card-actions {
-                display: flex;
-                align-items: center;
-                gap: 3px;
-                flex-shrink: 0;
-            }
-            .card-actions .qty-btn {
-                width: 24px;
-                height: 24px;
-                font-size: 14px;
-                border-radius: 4px;
-            }
-            .card-actions .qty-value {
-                min-width: 22px;
-                font-size: 13px;
-                padding: 0 2px;
-            }
-            .card-del-btn {
-                width: 24px;
-                height: 24px;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                background: #fff;
-                color: #dc3545;
-                font-size: 12px;
-                font-weight: 700;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-left: 4px;
-                transition: all 0.15s;
-            }
-            .card-del-btn:hover { background: #dc3545; color: white; border-color: #dc3545; }
+            .table-footer { flex-direction: column; gap: 10px; padding: 12px; }
+            .pagination { flex-wrap: wrap; justify-content: center; }
+            .page-btn { min-height: 36px; min-width: 36px; }
 
             .modal { padding: 24px 20px; width: 95vw; max-width: 95vw; }
-            .modal h2 { font-size: 18px; }
-            .form-group input, .form-group select { font-size: 16px; padding: 14px; }
+            .modal h2 { font-size: 17px; }
+            .form-group input, .form-group select { font-size: 16px; padding: 12px; }
             .modal-actions { flex-direction: column; }
-            .modal-actions .btn { width: 100%; text-align: center; padding: 14px; }
+            .modal-actions .btn { width: 100%; justify-content: center; padding: 12px; }
 
-            .pagination { gap: 4px; padding: 16px 0; flex-wrap: wrap; }
-            .pagination button { padding: 10px 14px; min-height: 40px; font-size: 14px; }
-
-            .toast {
-                bottom: 16px;
-                left: 16px;
-                right: 16px;
-                text-align: center;
-            }
+            .toast { bottom: 16px; left: 16px; right: 16px; text-align: center; }
+            .summary-cards { grid-template-columns: 1fr; }
+            .brand-card-grid { grid-template-columns: repeat(2, 1fr); }
+            .setting-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .setting-row input[type="text"], .setting-row select { width: 100%; }
         }
 
+        /* ===== 33. Responsive: Small ===== */
         @media (max-width: 380px) {
-            .stats { grid-template-columns: 1fr 1fr; gap: 8px; }
-            .stat-card .value { font-size: 18px; }
-            .card-name { font-size: 13px; }
+            .stats-grid { gap: 8px; }
+            .stat-card { padding: 10px; gap: 10px; }
+            .stat-value { font-size: 18px; }
+            .stat-label { font-size: 11px; }
+            .card-name { font-size: 12px; }
+            .page-title { font-size: 15px; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1>블루파이 재고관리</h1>
-            <div class="date">실시간 재고관리 시스템</div>
-        </div>
-        <button class="btn btn-success" onclick="openAddModal()">+ 재고 추가</button>
-    </div>
-
-    <div class="refresh-bar">
-        <button class="btn-refresh" onclick="refreshAll()" id="refreshBtn">
-            <span class="refresh-icon">&#8635;</span> 새로고침
-        </button>
-        <span class="refresh-time">마지막 갱신: <strong id="refreshTime">-</strong></span>
-    </div>
-
-    <div class="stats">
-        <div class="stat-card">
-            <div class="label">총 상품 종류</div>
-            <div class="value" id="statTotal">-</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">총 재고 수량</div>
-            <div class="value" id="statQty">-</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">브랜드 수</div>
-            <div class="value" id="statBrands">-</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">품절 상품</div>
-            <div class="value" id="statOut">-</div>
-        </div>
-    </div>
-
-    <div class="controls">
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="상품명, 컬러로 검색..." oninput="debounceSearch()">
-        </div>
-        <select class="filter-select" id="brandFilter" onchange="loadData()">
-            <option value="">전체 브랜드</option>
-        </select>
-        <select class="filter-select" id="sortSelect" onchange="loadData()">
-            <option value="id-asc">기본 순서</option>
-            <option value="name-asc">상품명 오름차순</option>
-            <option value="name-desc">상품명 내림차순</option>
-            <option value="qty-asc">수량 적은순</option>
-            <option value="qty-desc">수량 많은순</option>
-            <option value="color-asc">컬러 오름차순</option>
-            <option value="updated-desc">최근 수정순</option>
-        </select>
-    </div>
-
-    <div class="bulk-actions" id="bulkActions">
-        <span id="selectedCount">0개 선택됨</span>
-        <button class="btn btn-danger btn-sm" onclick="deleteSelected()">선택 삭제</button>
-        <button class="btn btn-secondary btn-sm" onclick="clearSelection()">선택 해제</button>
-    </div>
-
-    <div class="table-container">
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-                        <th class="no-col">No.</th>
-                        <th>브랜드</th>
-                        <th>상품명</th>
-                        <th>컬러</th>
-                        <th>수량</th>
-                        <th>수정일</th>
-                        <th class="action-col">관리</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <tr><td colspan="8" class="loading">데이터를 불러오는 중...</td></tr>
-                </tbody>
-            </table>
-            <!-- Mobile Card View -->
-            <div class="card-list" id="cardList"></div>
-
-            <div id="emptyState" class="empty-state" style="display:none;">
-                <div class="icon">📦</div>
-                <p>검색 결과가 없습니다.</p>
+    <!-- ===== Login Page ===== -->
+    <div class="login-page" id="loginPage" style="display:none">
+        <div class="login-card">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
+            </div>
+            <h1>블루파이</h1>
+            <p>재고관리 시스템에 로그인하세요</p>
+            <div class="form-group">
+                <label>아이디</label>
+                <input type="text" placeholder="관리자 아이디 입력">
+            </div>
+            <div class="form-group">
+                <label>비밀번호</label>
+                <input type="password" placeholder="비밀번호 입력">
+            </div>
+            <div style="margin-top:20px;">
+                <button class="btn btn-accent" onclick="handleLogin()">로그인</button>
             </div>
         </div>
-        <div class="pagination" id="pagination"></div>
     </div>
 
-    <!-- Add Modal -->
+    <!-- ===== App Wrapper ===== -->
+    <div class="app-wrapper" id="appWrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
+                </div>
+                <span class="logo-text">블루파이</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-label">메뉴</div>
+                <a href="#inventory" class="nav-item active">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
+                    재고 관리
+                    <span class="nav-badge" id="sidebarOutBadge" style="display:none">0</span>
+                </a>
+                <a href="#sales" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    매출 현황
+                </a>
+                <a href="#log" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    입출고 내역
+                </a>
+                <a href="#brands" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                    브랜드 관리
+                </a>
+
+                <div class="nav-label" style="margin-top:16px;">시스템</div>
+                <a href="#settings" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                    설정
+                </a>
+            </nav>
+
+            <div class="sidebar-user">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name">관리자</div>
+                    <div class="user-role">Administrator</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Sidebar Overlay (mobile) -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h1 class="page-title" id="pageTitle">재고 관리</h1>
+                    <span class="sync-dot" id="syncDot"></span>
+                    <span class="sync-time" id="refreshTime">-</span>
+                </div>
+                <div class="topbar-right">
+                    <button class="btn btn-outline" id="exportBtn" onclick="showToast('내보내기 기능 준비 중입니다.', 'info')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        내보내기
+                    </button>
+                    <button class="btn btn-accent" id="addItemBtn" onclick="openAddModal()">+ 재고 추가</button>
+                    <button class="btn btn-outline" id="refreshBtn" onclick="refreshAll()" title="새로고침">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- ===== PAGE: Inventory ===== -->
+            <section class="page-section" id="page-inventory">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-blue">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="statTotal">-</div>
+                            <div class="stat-label">총 상품 종류</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-green">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="statQty">-</div>
+                            <div class="stat-label">총 재고 수량</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-purple">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="statBrands">-</div>
+                            <div class="stat-label">브랜드 수</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-red">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="statOut">-</div>
+                            <div class="stat-label">품절 상품</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="searchInput" placeholder="상품명, 컬러로 검색..." oninput="debounceSearch()">
+                    </div>
+                    <select class="filter-select" id="brandFilter" onchange="loadData()">
+                        <option value="">전체 브랜드</option>
+                    </select>
+                    <select class="filter-select" id="sortSelect" onchange="loadData()">
+                        <option value="id-asc">기본 순서</option>
+                        <option value="name-asc">상품명 오름차순</option>
+                        <option value="name-desc">상품명 내림차순</option>
+                        <option value="qty-asc">수량 적은순</option>
+                        <option value="qty-desc">수량 많은순</option>
+                        <option value="color-asc">컬러 오름차순</option>
+                        <option value="updated-desc">최근 수정순</option>
+                    </select>
+                    <span class="filter-count" id="filterCount"></span>
+                </div>
+
+                <!-- Bulk Actions -->
+                <div class="bulk-bar" id="bulkActions">
+                    <span id="selectedCount">0개 선택됨</span>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelected()">선택 삭제</button>
+                    <button class="btn btn-outline btn-sm" onclick="clearSelection()">선택 해제</button>
+                </div>
+
+                <!-- Table Content -->
+                <div class="content-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-check"><input type="checkbox" class="custom-check" id="selectAll" onchange="toggleSelectAll()"></th>
+                                <th class="col-no">No.</th>
+                                <th class="col-brand">브랜드</th>
+                                <th class="col-name">상품명</th>
+                                <th class="col-color">컬러</th>
+                                <th class="col-qty">수량</th>
+                                <th class="col-date">수정일</th>
+                                <th class="col-more"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="8" class="loading">데이터를 불러오는 중...</td></tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Mobile Card View -->
+                    <div class="card-list" id="cardList"></div>
+
+                    <div id="emptyState" class="empty-state" style="display:none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
+                        <p>검색 결과가 없습니다.</p>
+                    </div>
+
+                    <!-- Table Footer -->
+                    <div class="table-footer" id="tableFooter" style="display:none;">
+                        <span class="table-footer-info" id="tableFooterInfo"></span>
+                        <div class="pagination" id="pagination"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: Sales ===== -->
+            <section class="page-section" id="page-sales" style="display:none">
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="summary-value">-</div>
+                        <div class="summary-label">월 매출</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">-</div>
+                        <div class="summary-label">주문 수</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">-</div>
+                        <div class="summary-label">평균 단가</div>
+                    </div>
+                </div>
+                <div class="shell-card">
+                    <div class="shell-header">
+                        <h2>최근 매출</h2>
+                    </div>
+                    <table class="shell-table">
+                        <thead>
+                            <tr><th>일시</th><th>상품명</th><th>수량</th><th>금액</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-muted);">매출 데이터가 없습니다. 곧 업데이트 예정입니다.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: Log ===== -->
+            <section class="page-section" id="page-log" style="display:none">
+                <div class="shell-card">
+                    <div class="shell-header">
+                        <h2>입출고 내역</h2>
+                        <button class="btn btn-outline btn-sm">필터</button>
+                    </div>
+                    <table class="shell-table">
+                        <thead>
+                            <tr><th>일시</th><th>유형</th><th>상품명</th><th>수량변동</th><th>처리자</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>2026-02-10 14:32</td>
+                                <td><span class="type-badge type-in">입고</span></td>
+                                <td>hm 캐시미어 울 라운드니트</td>
+                                <td style="color:var(--success);">+5</td>
+                                <td>관리자</td>
+                            </tr>
+                            <tr>
+                                <td>2026-02-10 13:15</td>
+                                <td><span class="type-badge type-out">출고</span></td>
+                                <td>it 홀가먼트 베이직 캐시미어 울 라운드 니트</td>
+                                <td style="color:var(--danger);">-2</td>
+                                <td>관리자</td>
+                            </tr>
+                            <tr>
+                                <td>2026-02-10 11:40</td>
+                                <td><span class="type-badge type-edit">수정</span></td>
+                                <td>ls 폭스 울 라운드니트 아론 래글런 긴팔</td>
+                                <td>1 → 3</td>
+                                <td>관리자</td>
+                            </tr>
+                            <tr>
+                                <td>2026-02-09 18:22</td>
+                                <td><span class="type-badge type-in">입고</span></td>
+                                <td>mu 봄 여름 스트라이프 반팔 루즈 라운드니트 이즈</td>
+                                <td style="color:var(--success);">+10</td>
+                                <td>관리자</td>
+                            </tr>
+                            <tr>
+                                <td>2026-02-09 16:05</td>
+                                <td><span class="type-badge type-out">출고</span></td>
+                                <td>ov 캐시미어 울 하이넥니트 세라</td>
+                                <td style="color:var(--danger);">-1</td>
+                                <td>관리자</td>
+                            </tr>
+                            <tr>
+                                <td>2026-02-09 10:30</td>
+                                <td><span class="type-badge type-in">입고</span></td>
+                                <td>ps 캐시미어 울 후드 집업 니트베스트</td>
+                                <td style="color:var(--success);">+3</td>
+                                <td>관리자</td>
+                            </tr>
+                            <tr>
+                                <td>2026-02-08 15:12</td>
+                                <td><span class="type-badge type-edit">수정</span></td>
+                                <td>ru 캐시미어 울 라운드니트 베이직 긴팔</td>
+                                <td>2 → 1</td>
+                                <td>관리자</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: Brands ===== -->
+            <section class="page-section" id="page-brands" style="display:none">
+                <div class="shell-header">
+                    <h2>브랜드 관리</h2>
+                    <button class="btn btn-accent btn-sm" onclick="showToast('브랜드 추가 기능 준비 중입니다.', 'info')">+ 브랜드 추가</button>
+                </div>
+                <div class="brand-card-grid" id="brandCardGrid"></div>
+            </section>
+
+            <!-- ===== PAGE: Settings ===== -->
+            <section class="page-section" id="page-settings" style="display:none">
+                <div class="shell-card">
+                    <div class="settings-section">
+                        <h3>기본 설정</h3>
+                        <div class="setting-row">
+                            <label>쇼핑몰 이름</label>
+                            <input type="text" value="블루파이" disabled>
+                        </div>
+                        <div class="setting-row">
+                            <label>기본 페이지 크기</label>
+                            <select disabled>
+                                <option>30개</option>
+                                <option>50개</option>
+                                <option>100개</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label>테마</label>
+                            <select disabled>
+                                <option>라이트</option>
+                                <option>다크</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>알림</h3>
+                        <div class="setting-row">
+                            <label>품절 알림</label>
+                            <div class="toggle-switch active" onclick="this.classList.toggle('active')"></div>
+                        </div>
+                        <div class="setting-row">
+                            <label>재고 변경 알림</label>
+                            <div class="toggle-switch" onclick="this.classList.toggle('active')"></div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>데이터 관리</h3>
+                        <div class="setting-row">
+                            <label>데이터 백업</label>
+                            <button class="btn btn-outline btn-sm" onclick="showToast('백업 기능 준비 중입니다.', 'info')">백업 다운로드</button>
+                        </div>
+                        <div class="setting-row">
+                            <label>데이터 초기화</label>
+                            <button class="btn btn-danger btn-sm" onclick="showToast('초기화 기능 준비 중입니다.', 'info')">초기화</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ===== Add Modal ===== -->
     <div class="modal-overlay" id="addModal">
         <div class="modal">
             <h2>재고 추가</h2>
@@ -605,34 +1366,83 @@
                 <input type="number" id="inputQty" min="0" value="1" placeholder="수량 입력">
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeAddModal()">취소</button>
+                <button class="btn btn-outline" onclick="closeAddModal()">취소</button>
                 <button class="btn btn-primary" onclick="submitItem()">추가</button>
             </div>
         </div>
     </div>
 
-    <!-- Confirm Modal -->
+    <!-- ===== Confirm Modal ===== -->
     <div class="modal-overlay" id="confirmModal">
         <div class="modal">
             <h2>삭제 확인</h2>
-            <p id="confirmMsg" style="margin-bottom:8px;"></p>
+            <p id="confirmMsg" style="margin-bottom:8px; font-size:14px; color:var(--text-secondary);"></p>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeConfirm()">취소</button>
+                <button class="btn btn-outline" onclick="closeConfirm()">취소</button>
                 <button class="btn btn-danger" onclick="confirmDelete()">삭제</button>
             </div>
         </div>
     </div>
 
+    <!-- ===== Dropdown Menu (shared) ===== -->
+    <div class="dropdown-menu" id="dropdownMenu">
+        <button class="dropdown-item" onclick="dropdownEdit()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            수정
+        </button>
+        <button class="dropdown-item dropdown-item-danger" onclick="dropdownDelete()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            삭제
+        </button>
+    </div>
+
+    <!-- ===== Toast ===== -->
     <div class="toast" id="toast"></div>
 
     <script>
-    const brandColors = {
-        'ag': '#e91e63', 'ed': '#9c27b0', 'hm': '#3f51b5', 'ig': '#00bcd4',
-        'it': '#009688', 'lc': '#4caf50', 'ls': '#8bc34a', 'mo': '#ff9800',
-        'mu': '#ff5722', 'mv': '#795548', 'ov': '#607d8b', 'ps': '#e91e63',
-        'ru': '#673ab7', 'sm': '#2196f3', 've': '#00897b', 'vi': '#d81b60',
+    // ===== Color Mapping (Korean → HEX) =====
+    const colorMap = {
+        '블랙': '#111827', '화이트': '#FFFFFF', '아이보리': '#FFFFF0', '크림': '#FFF8DC',
+        '베이지': '#D2B48C', '연베이지': '#E8D5B7', '진베이지': '#C4A882', '브라운': '#8B4513',
+        '연브라운': '#A0785A', '모카': '#967969', '모카브라운': '#7B5B4C', '카카오': '#5C3D2E',
+        '카멜': '#C19A6B', '오트밀': '#D3C4A5', '그레이': '#808080', '연그레이': '#C0C0C0',
+        '차콜': '#36454F', '딥차콜': '#2D3748', '그레이멜': '#9CA3AF', '멜란그레이': '#A9A9A9',
+        '폴그레이': '#8B8B8B', '라이트그레이': '#D1D5DB',
+        '네이비': '#1E3A5F', '블루': '#2563EB', '딥블루': '#1E40AF', '스카이블루': '#87CEEB',
+        '소라': '#87CEEB', '베이비블루': '#89CFF0', '블루그레이': '#6B8DA6', '청': '#4169E1', '청록': '#008B8B',
+        '핑크': '#EC4899', '연핑크': '#FBCFE8', '딥핑크': '#BE185D', '인디핑크': '#E8A0BF',
+        '살몬핑크': '#FA8072', '레드': '#DC2626', '와인': '#722F37', '버건디': '#800020',
+        '그린': '#16A34A', '딥그린': '#166534', '카키': '#6B7B3C', '연카키': '#9DA87E',
+        '올리브카키': '#6B8E23', '민트': '#3EB489', '옐로우': '#EAB308', '오렌지': '#F97316',
+        '라벤더': '#C4B5FD', '보라': '#7C3AED', '연보라': '#C4B5FD', '자주': '#881177',
+        '먹색': '#3D3D3D', '린넨베이지': '#CEB89C', '모카진밤': '#5C3A2E',
+        '글리터카키': '#8B9A5B', '글리터샴페인': '#F7E7CE', '크림아이보리': '#FFF9E6',
+        '회아이보리': '#E5E0D8', '오트베이지': '#CDB898', '오트연베이지': '#D9CCBA',
+        '오트아이보리': '#E8DECE', '퓨어아이보리': '#FEFEFA', '마블핑크': '#E8B4B8',
+        '린넨 블루그레이': '#8FAAB7', '린넨 린넨베이지': '#D4C4A8', '린넨 파스텔옐로우': '#FFEEA4',
     };
 
+    function getColorHex(name) {
+        if (!name) return null;
+        const clean = name.trim().replace(/\s+[SMLsml]$/, '');
+        if (colorMap[clean]) return colorMap[clean];
+        // Try longest-key match
+        const sorted = Object.keys(colorMap).sort((a, b) => b.length - a.length);
+        for (const key of sorted) {
+            if (clean.includes(key)) return colorMap[key];
+        }
+        return null;
+    }
+
+    // ===== Brand Colors =====
+    const brandColors = {
+        'ag': '#E91E63', 'ed': '#9C27B0', 'hm': '#3F51B5', 'ig': '#00BCD4',
+        'it': '#009688', 'lc': '#4CAF50', 'ls': '#8BC34A', 'mo': '#FF9800',
+        'mu': '#FF5722', 'mv': '#795548', 'ov': '#607D8B', 'ps': '#E91E63',
+        'ru': '#673AB7', 'sm': '#2196F3', 've': '#00897B', 'vi': '#D81B60',
+    };
+
+    // ===== State =====
     let currentPage = 1;
     let totalPages = 1;
     let totalItems = 0;
@@ -641,7 +1451,123 @@
     let searchTimer = null;
     let pendingDeleteIds = [];
 
-    // --- API Calls ---
+    // ===== Router =====
+    const pageTitles = {
+        'inventory': '재고 관리',
+        'sales': '매출 현황',
+        'log': '입출고 내역',
+        'brands': '브랜드 관리',
+        'settings': '설정',
+    };
+
+    function router() {
+        const hash = (window.location.hash.slice(1) || 'inventory');
+
+        // Login page
+        if (hash === 'login') {
+            document.getElementById('appWrapper').style.display = 'none';
+            document.getElementById('loginPage').style.display = 'flex';
+            return;
+        }
+        document.getElementById('appWrapper').style.display = 'flex';
+        document.getElementById('loginPage').style.display = 'none';
+
+        // Valid pages
+        const validPages = ['inventory', 'sales', 'log', 'brands', 'settings'];
+        const page = validPages.includes(hash) ? hash : 'inventory';
+
+        // Show/hide pages
+        document.querySelectorAll('.page-section').forEach(el => el.style.display = 'none');
+        const target = document.getElementById(`page-${page}`);
+        if (target) target.style.display = 'block';
+
+        // Sidebar active
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        const activeLink = document.querySelector(`.nav-item[href="#${page}"]`);
+        if (activeLink) activeLink.classList.add('active');
+
+        // Page title
+        document.getElementById('pageTitle').textContent = pageTitles[page] || '블루파이';
+
+        // Topbar buttons: show only on inventory
+        const showOnInventory = page === 'inventory';
+        document.getElementById('addItemBtn').style.display = showOnInventory ? '' : 'none';
+        document.getElementById('exportBtn').style.display = showOnInventory ? '' : 'none';
+
+        // Close sidebar on mobile after navigation
+        if (window.innerWidth <= 768) {
+            closeSidebar();
+        }
+
+        // Load brand cards when navigating to brands page
+        if (page === 'brands') {
+            loadBrandCards();
+        }
+    }
+
+    window.addEventListener('hashchange', router);
+
+    // ===== Sidebar Toggle =====
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+        document.getElementById('sidebarOverlay').classList.toggle('active');
+    }
+
+    function closeSidebar() {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sidebarOverlay').classList.remove('active');
+    }
+
+    // ===== Dropdown Menu =====
+    let dropdownData = {};
+
+    function openDropdown(event, id, name, color, qty) {
+        event.stopPropagation();
+        const btn = event.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        const menu = document.getElementById('dropdownMenu');
+        dropdownData = { id, name, color, qty };
+
+        // Position
+        const top = rect.bottom + 4;
+        const left = Math.min(rect.right - 140, window.innerWidth - 160);
+        menu.style.top = top + 'px';
+        menu.style.left = Math.max(8, left) + 'px';
+        menu.classList.add('active');
+    }
+
+    function closeDropdown() {
+        document.getElementById('dropdownMenu').classList.remove('active');
+    }
+
+    function dropdownEdit() {
+        closeDropdown();
+        if (dropdownData.id) {
+            startEditQty(dropdownData.id, dropdownData.qty);
+        }
+    }
+
+    function dropdownDelete() {
+        closeDropdown();
+        if (dropdownData.id) {
+            confirmSingleDelete(dropdownData.id, dropdownData.name, dropdownData.color);
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        const menu = document.getElementById('dropdownMenu');
+        if (!menu.contains(e.target)) {
+            closeDropdown();
+        }
+    });
+
+    // ===== Login =====
+    function handleLogin() {
+        showToast('로그인 기능 준비 중입니다.', 'info');
+        window.location.hash = '#inventory';
+    }
+
+    // ===== API Calls =====
     async function api(url, options = {}) {
         const res = await fetch(url, {
             headers: { 'Content-Type': 'application/json' },
@@ -656,10 +1582,18 @@
 
     async function loadStats() {
         const stats = await api('/api/stats');
-        document.getElementById('statTotal').textContent = stats.totalItems;
-        document.getElementById('statQty').textContent = stats.totalQty;
+        document.getElementById('statTotal').textContent = stats.totalItems.toLocaleString();
+        document.getElementById('statQty').textContent = stats.totalQty.toLocaleString();
         document.getElementById('statBrands').textContent = stats.brands;
         document.getElementById('statOut').textContent = stats.outOfStock;
+        // Sidebar badge
+        const badge = document.getElementById('sidebarOutBadge');
+        if (stats.outOfStock > 0) {
+            badge.textContent = stats.outOfStock;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 
     async function loadBrands() {
@@ -707,48 +1641,62 @@
         }, 300);
     }
 
-    // --- Render ---
+    // ===== Render =====
     function render() {
         const tbody = document.getElementById('tableBody');
         const cardList = document.getElementById('cardList');
         const emptyState = document.getElementById('emptyState');
+        const footer = document.getElementById('tableFooter');
+
+        // Filter count
+        document.getElementById('filterCount').textContent = `${totalItems}건`;
 
         if (currentItems.length === 0) {
             tbody.innerHTML = '';
             cardList.innerHTML = '';
             emptyState.style.display = 'block';
+            footer.style.display = 'none';
         } else {
             emptyState.style.display = 'none';
+            footer.style.display = 'flex';
             const startIdx = (currentPage - 1) * 30;
 
             // Desktop table
             tbody.innerHTML = currentItems.map((item, idx) => {
                 const num = startIdx + idx + 1;
                 const checked = selectedIds.has(item.id) ? 'checked' : '';
-                const qtyClass = item.qty === 0 ? 'qty-col qty-zero' : 'qty-col';
+                const brandClass = item.brand ? `brand-${item.brand}` : 'brand-default';
                 const brandHtml = item.brand
-                    ? `<span class="brand-badge" style="background:${brandColors[item.brand] || '#999'}">${item.brand}</span>`
-                    : '-';
+                    ? `<span class="brand-badge ${brandClass}">${item.brand}</span>`
+                    : '<span style="color:var(--text-muted);">-</span>';
+                const colorHex = getColorHex(item.color);
+                const colorDot = colorHex
+                    ? `<span class="color-dot" style="background:${colorHex}"></span>`
+                    : '';
                 const upd = formatUpdatedAt(item.updated_at);
                 const updHtml = item.updated_at
-                    ? `<span class="updated-badge ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
-                    : '<span style="color:#ccc;font-size:12px;">-</span>';
+                    ? `<span class="date-text ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
+                    : '<span style="color:var(--text-muted);font-size:12px;">-</span>';
+                const qtyClass = item.qty === 0 ? 'qty-value qty-zero' : 'qty-value';
+
                 return `<tr>
-                    <td class="checkbox-col"><input type="checkbox" ${checked} onchange="toggleSelect(${item.id})"></td>
-                    <td class="no-col">${num}</td>
-                    <td>${brandHtml}</td>
-                    <td>${escapeHtml(item.name)}</td>
-                    <td>${escapeHtml(item.color)}</td>
-                    <td class="${qtyClass}">
-                        <div class="qty-controls">
+                    <td class="col-check"><input type="checkbox" class="custom-check" ${checked} onchange="toggleSelect(${item.id})"></td>
+                    <td class="col-no">${num}</td>
+                    <td class="col-brand">${brandHtml}</td>
+                    <td class="col-name">${escapeHtml(item.name)}</td>
+                    <td class="col-color"><span class="color-chip">${colorDot}${escapeHtml(item.color)}</span></td>
+                    <td class="col-qty">
+                        <div class="qty-group">
                             <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)">-</button>
-                            <span class="qty-value" id="qty-${item.id}" onclick="startEditQty(${item.id}, ${item.qty})">${item.qty}</span>
+                            <span class="${qtyClass}" id="qty-${item.id}" onclick="startEditQty(${item.id}, ${item.qty})">${item.qty}</span>
                             <button class="qty-btn" onclick="changeQty(${item.id}, ${item.qty}, 1)">+</button>
                         </div>
                     </td>
-                    <td>${updHtml}</td>
-                    <td class="action-col">
-                        <button class="btn btn-danger btn-sm" onclick="confirmSingleDelete(${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}')" title="삭제">X</button>
+                    <td class="col-date">${updHtml}</td>
+                    <td class="col-more">
+                        <button class="more-btn" onclick="openDropdown(event, ${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}', ${item.qty})">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                        </button>
                     </td>
                 </tr>`;
             }).join('');
@@ -757,31 +1705,43 @@
             cardList.innerHTML = currentItems.map((item, idx) => {
                 const num = startIdx + idx + 1;
                 const checked = selectedIds.has(item.id) ? 'checked' : '';
+                const brandClass = item.brand ? `brand-${item.brand}` : 'brand-default';
                 const brandHtml = item.brand
-                    ? `<span class="brand-badge" style="background:${brandColors[item.brand] || '#999'}">${item.brand}</span>`
+                    ? `<span class="brand-badge ${brandClass}">${item.brand}</span>`
                     : '';
-                const qtyColor = item.qty === 0 ? 'color:#dc3545' : '';
+                const colorHex = getColorHex(item.color);
+                const colorDot = colorHex
+                    ? `<span class="color-dot" style="background:${colorHex}"></span>`
+                    : '';
+                const qtyStyle = item.qty === 0 ? 'color:var(--danger);font-weight:700' : '';
                 const upd = formatUpdatedAt(item.updated_at);
                 const updHtml = item.updated_at
-                    ? `<span class="updated-badge ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
+                    ? `<span class="date-text ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
                     : '';
+
                 return `<div class="card-item">
                     <div class="card-top">
                         <div class="card-check">
-                            <input type="checkbox" ${checked} onchange="toggleSelect(${item.id})">
+                            <input type="checkbox" class="custom-check" ${checked} onchange="toggleSelect(${item.id})">
                             <span class="card-no">#${num}</span>
-                            <span class="card-brand">${brandHtml}</span>
+                            ${brandHtml}
                         </div>
-                        ${updHtml}
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            ${updHtml}
+                            <button class="more-btn" onclick="openDropdown(event, ${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}', ${item.qty})" style="width:28px;height:28px;">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-name">${escapeHtml(item.name)}</div>
                     <div class="card-bottom">
-                        <span class="card-color-text">${escapeHtml(item.color)}</span>
+                        <span class="card-color-text">${colorDot}${escapeHtml(item.color)}</span>
                         <div class="card-actions">
-                            <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)">-</button>
-                            <span class="qty-value" style="${qtyColor}" id="mq-${item.id}" onclick="startEditQtyMobile(${item.id}, ${item.qty})">${item.qty}</span>
-                            <button class="qty-btn" onclick="changeQty(${item.id}, ${item.qty}, 1)">+</button>
-                            <button class="card-del-btn" onclick="confirmSingleDelete(${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}')">&times;</button>
+                            <div class="qty-group">
+                                <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)" style="width:28px;height:28px;">-</button>
+                                <span class="qty-value" style="${qtyStyle}" id="mq-${item.id}" onclick="startEditQtyMobile(${item.id}, ${item.qty})">${item.qty}</span>
+                                <button class="qty-btn" onclick="changeQty(${item.id}, ${item.qty}, 1)" style="width:28px;height:28px;">+</button>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -794,12 +1754,32 @@
     }
 
     function renderPagination() {
-        const div = document.getElementById('pagination');
-        if (totalPages <= 1) { div.innerHTML = ''; return; }
+        const paginationDiv = document.getElementById('pagination');
+        const footerInfo = document.getElementById('tableFooterInfo');
+        const footer = document.getElementById('tableFooter');
 
-        let html = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goPage(${currentPage - 1})">&lt;</button>`;
+        if (totalPages <= 1 && totalItems > 0) {
+            footer.style.display = 'flex';
+            footerInfo.textContent = `총 ${totalItems}개`;
+            paginationDiv.innerHTML = '';
+            return;
+        }
+        if (totalItems === 0) {
+            footer.style.display = 'none';
+            return;
+        }
+
+        const start = (currentPage - 1) * 30 + 1;
+        const end = Math.min(currentPage * 30, totalItems);
+        footerInfo.textContent = `${totalItems}개 중 ${start}-${end}`;
+
+        let html = '';
+        // Prev button
+        html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goPage(${currentPage - 1})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>`;
+
         let pages = [];
-
         if (totalPages <= 7) {
             for (let i = 1; i <= totalPages; i++) pages.push(i);
         } else {
@@ -813,15 +1793,19 @@
         }
 
         pages.forEach(p => {
-            if (p === '...') html += `<span style="padding:0 4px;">...</span>`;
-            else html += `<button class="${p === currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
+            if (p === '...') {
+                html += `<span class="page-ellipsis">...</span>`;
+            } else {
+                html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
+            }
         });
 
-        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goPage(${currentPage + 1})">&gt;</button>`;
-        const start = (currentPage - 1) * 30 + 1;
-        const end = Math.min(currentPage * 30, totalItems);
-        html += `<span class="page-info" style="margin-left:12px;">${totalItems}개 중 ${start}-${end}</span>`;
-        div.innerHTML = html;
+        // Next button
+        html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goPage(${currentPage + 1})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>`;
+
+        paginationDiv.innerHTML = html;
     }
 
     function goPage(p) {
@@ -836,12 +1820,12 @@
     }
 
     function escapeAttr(str) {
-        return (str || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
     }
 
     function formatUpdatedAt(dateStr) {
         if (!dateStr) return '-';
-        const d = new Date(dateStr + 'Z'); // UTC from SQLite
+        const d = new Date(dateStr + 'Z');
         const now = new Date();
         const diff = now - d;
         const mins = Math.floor(diff / 60000);
@@ -861,11 +1845,11 @@
             timeText = `${mo}-${dd} ${hh}:${mi}`;
         }
 
-        const isRecent = diff < 3600000; // 1시간 이내
+        const isRecent = diff < 3600000;
         return { timeText, isRecent };
     }
 
-    // --- Selection ---
+    // ===== Selection =====
     function toggleSelect(id) {
         if (selectedIds.has(id)) selectedIds.delete(id);
         else selectedIds.add(id);
@@ -896,7 +1880,7 @@
         }
     }
 
-    // --- Refresh ---
+    // ===== Refresh =====
     function updateRefreshTime() {
         const now = new Date();
         const y = now.getFullYear();
@@ -924,7 +1908,7 @@
         }
     }
 
-    // --- Qty Controls ---
+    // ===== Qty Controls =====
     async function changeQty(id, currentQty, delta) {
         const newQty = Math.max(0, currentQty + delta);
         if (newQty === currentQty && delta < 0) return;
@@ -981,9 +1965,8 @@
         }
     }
 
-    // --- Add Item ---
+    // ===== Add Item =====
     function openAddModal() {
-        // Populate brand select
         const select = document.getElementById('inputBrand');
         const brands = [...document.getElementById('brandFilter').options]
             .map(o => o.value).filter(v => v);
@@ -1028,7 +2011,6 @@
         const color = document.getElementById('inputColor').value.trim();
         const qty = parseInt(document.getElementById('inputQty').value) || 0;
 
-        // Determine brand
         let brand = '';
         if (brandSelect === '__custom__') {
             if (!customBrand) { showToast('브랜드를 입력해주세요.', 'error'); return; }
@@ -1042,7 +2024,6 @@
         if (!rawName) { showToast('상품명을 입력해주세요.', 'error'); return; }
         if (!color) { showToast('컬러를 입력해주세요.', 'error'); return; }
 
-        // Combine brand + name
         const name = `${brand} ${rawName}`;
 
         try {
@@ -1054,7 +2035,6 @@
             showToast(`"${name}" 이(가) 추가되었습니다.`, 'success');
             loadStats();
             loadBrands();
-            // Go to last page
             currentPage = 999;
             loadData();
         } catch (e) {
@@ -1062,7 +2042,7 @@
         }
     }
 
-    // --- Delete ---
+    // ===== Delete =====
     function confirmSingleDelete(id, name, color) {
         pendingDeleteIds = [id];
         document.getElementById('confirmMsg').textContent = `"${name} (${color})" 을(를) 삭제하시겠습니까?`;
@@ -1104,7 +2084,7 @@
         }
     }
 
-    // --- Toast ---
+    // ===== Toast =====
     function showToast(msg, type = 'info') {
         const el = document.getElementById('toast');
         el.textContent = msg;
@@ -1112,7 +2092,24 @@
         setTimeout(() => el.classList.remove('show'), 2500);
     }
 
-    // --- Modal close on overlay ---
+    // ===== Brand Cards Page =====
+    async function loadBrandCards() {
+        const grid = document.getElementById('brandCardGrid');
+        try {
+            const brands = await api('/api/brands');
+            grid.innerHTML = brands.map(b => {
+                const brandClass = brandColors[b] ? `brand-${b}` : 'brand-default';
+                return `<div class="brand-card-item">
+                    <span class="brand-badge ${brandClass}">${b.toUpperCase()}</span>
+                    <div class="brand-card-stat">상품 관리</div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            grid.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px;">브랜드를 불러올 수 없습니다.</p>';
+        }
+    }
+
+    // ===== Modal close on overlay =====
     document.getElementById('addModal').addEventListener('click', function(e) {
         if (e.target === this) closeAddModal();
     });
@@ -1120,11 +2117,16 @@
         if (e.target === this) closeConfirm();
     });
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') { closeAddModal(); closeConfirm(); }
+        if (e.key === 'Escape') {
+            closeAddModal();
+            closeConfirm();
+            closeDropdown();
+        }
     });
 
-    // --- Init ---
+    // ===== Init =====
     async function init() {
+        router();
         await Promise.all([loadStats(), loadBrands(), loadData()]);
         updateRefreshTime();
     }
