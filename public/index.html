@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>블루파이 재고관리</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2563EB">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="블루파이">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
     <style>
         /* ===== 1. CSS Variables ===== */
@@ -1138,6 +1144,10 @@
                     <span class="sync-time" id="refreshTime">-</span>
                 </div>
                 <div class="topbar-right">
+                    <button class="btn btn-accent" id="installBtn" onclick="installPWA()" style="display:none" title="앱 설치">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span class="hide-mobile">설치</span>
+                    </button>
                     <button class="btn btn-outline" id="exportBtn" onclick="showToast('내보내기 기능 준비 중입니다.', 'info')">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         <span class="hide-mobile">내보내기</span>
@@ -2205,6 +2215,56 @@
         updateRefreshTime();
     }
     init();
+    </script>
+    <script>
+    // ===== PWA: Service Worker + Install Prompt =====
+    let deferredPrompt = null;
+
+    // Capture install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('installBtn').style.display = '';
+    });
+
+    window.addEventListener('appinstalled', () => {
+        deferredPrompt = null;
+        document.getElementById('installBtn').style.display = 'none';
+        showToast('앱이 설치되었습니다!', 'success');
+    });
+
+    function installPWA() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((result) => {
+            deferredPrompt = null;
+            if (result.outcome === 'accepted') {
+                document.getElementById('installBtn').style.display = 'none';
+            }
+        });
+    }
+
+    // Register Service Worker with update detection
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        if (confirm('새 버전이 있습니다. 업데이트하시겠습니까?')) {
+                            newWorker.postMessage('skipWaiting');
+                            window.location.reload();
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    // Hide install button if already in standalone mode
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+        document.getElementById('installBtn').style.display = 'none';
+    }
     </script>
 </body>
 </html>
