@@ -1593,6 +1593,21 @@
         </div>
     </div>
 
+    <!-- ===== Edit Modal ===== -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h2>상품 수정</h2>
+            <div class="form-group">
+                <label>상품명</label>
+                <input type="text" id="editName">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeEditModal()">취소</button>
+                <button class="btn btn-primary" onclick="submitEdit()">저장</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== Dropdown Menu (shared) ===== -->
     <div class="dropdown-menu" id="dropdownMenu">
         <button class="dropdown-item" onclick="dropdownEdit()">
@@ -1761,8 +1776,32 @@
     function dropdownEdit() {
         closeDropdown();
         if (dropdownData.id) {
-            startEditQty(dropdownData.id, dropdownData.qty);
+            openEditModal(dropdownData.id, dropdownData.name);
         }
+    }
+
+    let editTargetId = null;
+    function openEditModal(id, name) {
+        editTargetId = id;
+        document.getElementById('editName').value = name;
+        document.getElementById('editModal').classList.add('active');
+    }
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('active');
+        editTargetId = null;
+    }
+    async function submitEdit() {
+        const name = document.getElementById('editName').value.trim();
+        if (!name) { alert('상품명을 입력해주세요.'); return; }
+        try {
+            const res = await fetch(`/api/inventory/${editTargetId}`, {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ name })
+            });
+            if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+            closeEditModal();
+            loadInventory();
+        } catch (e) { alert('수정 실패: ' + e.message); }
     }
 
     function dropdownDelete() {

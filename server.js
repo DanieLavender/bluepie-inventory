@@ -118,17 +118,30 @@ app.post('/api/inventory', async (req, res) => {
   }
 });
 
-// PUT /api/inventory/:id - 수량 수정
+// PUT /api/inventory/:id - 수량/상품명 수정
 app.put('/api/inventory/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { qty } = req.body;
-    if (qty === undefined || qty === null) {
-      return res.status(400).json({ error: '수량을 입력해주세요.' });
+    const { qty, name } = req.body;
+    const sets = [];
+    const params = [];
+    if (name !== undefined) {
+      const trimmed = name.trim();
+      if (!trimmed) return res.status(400).json({ error: '상품명을 입력해주세요.' });
+      sets.push('name = ?');
+      params.push(trimmed);
     }
+    if (qty !== undefined) {
+      sets.push('qty = ?, updated_at = NOW()');
+      params.push(Math.max(0, parseInt(qty) || 0));
+    }
+    if (sets.length === 0) {
+      return res.status(400).json({ error: '변경할 항목이 없습니다.' });
+    }
+    params.push(id);
     const result = await query(
-      'UPDATE inventory SET qty = ?, updated_at = NOW() WHERE id = ?',
-      [Math.max(0, parseInt(qty) || 0), id]
+      `UPDATE inventory SET ${sets.join(', ')} WHERE id = ?`,
+      params
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: '항목을 찾을 수 없습니다.' });
