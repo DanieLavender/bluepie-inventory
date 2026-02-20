@@ -254,7 +254,7 @@ app.get('/api/sales/debug', async (req, res) => {
     await initSyncClients();
     const now = new Date();
     const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const types = ['PAYED', 'PURCHASE_DECIDED'];
+    const types = ['PAYED', 'DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'CANCELED', 'EXCHANGED', 'RETURNED'];
     const results = {};
 
     for (const t of types) {
