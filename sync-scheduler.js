@@ -157,6 +157,14 @@ class SyncScheduler {
       }
 
       await this.setConfig('last_sync_time', toStr);
+
+      // 매출 데이터 자동 수집
+      try {
+        await this.fetchSalesData();
+      } catch (salesErr) {
+        console.error('[Sync] 매출 수집 오류:', salesErr.message);
+      }
+
       this.lastRunResult = result;
       console.log(`[Sync] 완료 — 감지: ${result.detected}, 처리: ${result.processed}, 오류: ${result.errors}`);
       return result;
@@ -387,6 +395,83 @@ class SyncScheduler {
         productName, optionName, qty, 'fail', e.message);
       console.error(`[Sync] B 스토어 상품 생성 오류: ${productName}`, e.message);
       throw e;
+    }
+  }
+
+  // === Sales data fetch ===
+
+  async fetchSalesData() {
+    if (!this.hasClients()) return;
+
+    const stores = [
+      { key: 'A', client: this.storeA, configKey: 'sales_last_fetch_a' },
+      { key: 'B', client: this.storeB, configKey: 'sales_last_fetch_b' },
+    ];
+
+    for (const { key, client, configKey } of stores) {
+      try {
+        const lastFetch = await this.getConfig(configKey);
+        const now = new Date();
+        const from = lastFetch ? new Date(lastFetch) : new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        let cursor = new Date(from);
+        let inserted = 0;
+
+        while (cursor < now) {
+          const chunkEnd = new Date(Math.min(cursor.getTime() + 24 * 60 * 60 * 1000, now.getTime()));
+
+          try {
+            const orderIds = await client.getOrders(cursor.toISOString(), chunkEnd.toISOString());
+
+            if (orderIds.length > 0) {
+              const batchSize = 50;
+              for (let i = 0; i < orderIds.length; i += batchSize) {
+                const batch = orderIds.slice(i, i + batchSize);
+                const details = await client.getProductOrderDetail(batch);
+
+                for (const detail of details) {
+                  const po = detail.productOrder || detail;
+                  try {
+                    await query(
+                      `INSERT IGNORE INTO sales_orders (store, product_order_id, order_date, product_name, option_name, qty, unit_price, total_amount, product_order_status, channel_product_no)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                      [
+                        key,
+                        po.productOrderId || '',
+                        po.paymentDate || po.orderDate || po.placeOrderDate || chunkEnd.toISOString(),
+                        po.productName || '',
+                        po.optionName || null,
+                        po.quantity || 1,
+                        po.unitPrice || po.salePrice || 0,
+                        po.totalPaymentAmount || po.totalProductAmount || ((po.unitPrice || 0) * (po.quantity || 1)),
+                        po.productOrderStatus || '',
+                        String(po.channelProductNo || po.productId || ''),
+                      ]
+                    );
+                    inserted++;
+                  } catch (dbErr) {
+                    // duplicate ignored
+                  }
+                }
+
+                if (i + batchSize < orderIds.length) await this.sleep(300);
+              }
+            }
+          } catch (chunkErr) {
+            console.log(`[Sales] Store ${key} 청크 오류:`, chunkErr.message);
+          }
+
+          cursor = chunkEnd;
+          await this.sleep(300);
+        }
+
+        await this.setConfig(configKey, now.toISOString());
+        if (inserted > 0) {
+          console.log(`[Sales] Store ${key} 자동 수집: ${inserted}건`);
+        }
+      } catch (e) {
+        console.error(`[Sales] Store ${key} 수집 오류:`, e.message);
+      }
     }
   }
 

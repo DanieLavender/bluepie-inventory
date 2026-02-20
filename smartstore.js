@@ -182,6 +182,38 @@ class NaverCommerceClient {
     return data.data;
   }
 
+  // === Orders: Paid order queries ===
+
+  /**
+   * Get paid orders in a time range (max 24h per call)
+   * @param {string} fromDate ISO datetime
+   * @param {string} toDate ISO datetime
+   * @returns {Array} product order IDs with PAYED status
+   */
+  async getOrders(fromDate, toDate) {
+    const params = new URLSearchParams({
+      lastChangedFrom: fromDate,
+      lastChangedTo: toDate,
+      lastChangedType: 'PAYED',
+    });
+
+    const data = await this.apiCall(
+      'GET',
+      `/v1/pay-order/seller/product-orders/last-changed-statuses?${params}`
+    );
+
+    if (!data?.data?.lastChangeStatuses) return [];
+
+    const seen = new Set();
+    return data.data.lastChangeStatuses
+      .filter(s => {
+        if (seen.has(s.productOrderId)) return false;
+        seen.add(s.productOrderId);
+        return true;
+      })
+      .map(s => s.productOrderId);
+  }
+
   // === Store B: Product queries and updates ===
 
   /**

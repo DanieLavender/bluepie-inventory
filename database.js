@@ -79,6 +79,23 @@ async function initDb() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS sales_orders (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      store CHAR(1) NOT NULL,
+      product_order_id VARCHAR(255) UNIQUE NOT NULL,
+      order_date DATETIME NOT NULL,
+      product_name TEXT,
+      option_name VARCHAR(255) DEFAULT NULL,
+      qty INT DEFAULT 1,
+      unit_price INT DEFAULT 0,
+      total_amount INT DEFAULT 0,
+      product_order_status VARCHAR(50),
+      channel_product_no VARCHAR(255) DEFAULT NULL,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // Seed sync_config defaults
   const configDefaults = [
     ['sync_enabled', 'false'],
@@ -87,6 +104,8 @@ async function initDb() {
     ['last_sync_time', ''],
     ['store_b_display_status', 'SUSPENSION'],
     ['store_b_sale_status', 'SALE'],
+    ['sales_last_fetch_a', ''],
+    ['sales_last_fetch_b', ''],
   ];
   for (const [k, v] of configDefaults) {
     await query(

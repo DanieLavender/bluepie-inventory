@@ -169,6 +169,212 @@ app.post('/api/inventory/delete-bulk', async (req, res) => {
   }
 });
 
+// --- Sales API Routes ---
+
+// GET /api/sales/stats - 매출 요약 (이번달/전월)
+app.get('/api/sales/stats', async (req, res) => {
+  try {
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+
+    const thisMonth = await query(
+      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE order_date >= ?',
+      [thisMonthStart]
+    );
+    const lastMonth = await query(
+      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE order_date >= ? AND order_date <= ?',
+      [lastMonthStart, lastMonthEnd + ' 23:59:59']
+    );
+
+    const thisRevenue = Number(thisMonth[0].revenue);
+    const thisOrders = Number(thisMonth[0].orders);
+    const lastRevenue = Number(lastMonth[0].revenue);
+    const avgPrice = thisOrders > 0 ? Math.round(thisRevenue / thisOrders) : 0;
+    const growthRate = lastRevenue > 0 ? Math.round((thisRevenue - lastRevenue) / lastRevenue * 100) : null;
+
+    res.json({
+      thisMonthRevenue: thisRevenue,
+      thisMonthOrders: thisOrders,
+      avgPrice,
+      lastMonthRevenue: lastRevenue,
+      growthRate,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/sales/summary - 일별/월별 집계
+app.get('/api/sales/summary', async (req, res) => {
+  try {
+    const { period, startDate, endDate, store } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (startDate) {
+      conditions.push('order_date >= ?');
+      params.push(startDate);
+    }
+    if (endDate) {
+      conditions.push('order_date <= ?');
+      params.push(endDate + ' 23:59:59');
+    }
+    if (store && store !== 'all') {
+      conditions.push('store = ?');
+      params.push(store);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    let groupBy, dateExpr;
+    if (period === 'monthly') {
+      dateExpr = "DATE_FORMAT(order_date, '%Y-%m')";
+      groupBy = dateExpr;
+    } else {
+      dateExpr = 'DATE(order_date)';
+      groupBy = dateExpr;
+    }
+
+    const rows = await query(
+      `SELECT ${dateExpr} as date_key, COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue, COALESCE(SUM(qty), 0) as total_qty
+       FROM sales_orders ${where}
+       GROUP BY ${groupBy}
+       ORDER BY date_key DESC
+       LIMIT 60`,
+      params
+    );
+
+    res.json(rows.map(r => ({
+      date: r.date_key,
+      orders: Number(r.orders),
+      revenue: Number(r.revenue),
+      totalQty: Number(r.total_qty),
+      avgPrice: Number(r.orders) > 0 ? Math.round(Number(r.revenue) / Number(r.orders)) : 0,
+    })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/sales/recent - 최근 주문 목록
+app.get('/api/sales/recent', async (req, res) => {
+  try {
+    const { store, limit: lim } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (store && store !== 'all') {
+      conditions.push('store = ?');
+      params.push(store);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const pageSize = Math.min(parseInt(lim) || 20, 100);
+
+    const rows = await query(
+      `SELECT * FROM sales_orders ${where} ORDER BY order_date DESC LIMIT ?`,
+      [...params, pageSize]
+    );
+
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/sales/fetch - 수동 매출 데이터 수집
+app.post('/api/sales/fetch', async (req, res) => {
+  try {
+    await initSyncClients();
+
+    const stores = [
+      { key: 'A', client: scheduler.storeA, configKey: 'sales_last_fetch_a' },
+      { key: 'B', client: scheduler.storeB, configKey: 'sales_last_fetch_b' },
+    ];
+
+    let totalInserted = 0;
+    const errors = [];
+
+    for (const { key, client, configKey } of stores) {
+      try {
+        const lastFetch = await scheduler.getConfig(configKey);
+        const now = new Date();
+        const from = lastFetch ? new Date(lastFetch) : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        let cursor = new Date(from);
+        let storeInserted = 0;
+
+        while (cursor < now) {
+          const chunkEnd = new Date(Math.min(cursor.getTime() + 24 * 60 * 60 * 1000, now.getTime()));
+
+          try {
+            const orderIds = await client.getOrders(cursor.toISOString(), chunkEnd.toISOString());
+
+            if (orderIds.length > 0) {
+              const batchSize = 50;
+              for (let i = 0; i < orderIds.length; i += batchSize) {
+                const batch = orderIds.slice(i, i + batchSize);
+                const details = await client.getProductOrderDetail(batch);
+
+                for (const detail of details) {
+                  const po = detail.productOrder || detail;
+                  const productOrderId = po.productOrderId || '';
+                  const orderDate = po.paymentDate || po.orderDate || po.placeOrderDate || chunkEnd.toISOString();
+                  const productName = po.productName || '';
+                  const optionName = po.optionName || null;
+                  const qty = po.quantity || 1;
+                  const unitPrice = po.unitPrice || po.salePrice || 0;
+                  const totalAmount = po.totalPaymentAmount || po.totalProductAmount || (unitPrice * qty);
+                  const status = po.productOrderStatus || '';
+                  const channelProductNo = String(po.channelProductNo || po.productId || '');
+
+                  // 첫 실행 시 필드 구조 로깅
+                  if (storeInserted === 0 && i === 0) {
+                    console.log(`[Sales] Store ${key} 주문 상세 필드 샘플:`, JSON.stringify(po).slice(0, 800));
+                  }
+
+                  try {
+                    await query(
+                      `INSERT IGNORE INTO sales_orders (store, product_order_id, order_date, product_name, option_name, qty, unit_price, total_amount, product_order_status, channel_product_no)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                      [key, productOrderId, orderDate, productName, optionName, qty, unitPrice, totalAmount, status, channelProductNo]
+                    );
+                    storeInserted++;
+                  } catch (dbErr) {
+                    // INSERT IGNORE handles duplicates silently
+                  }
+                }
+
+                if (i + batchSize < orderIds.length) {
+                  await new Promise(r => setTimeout(r, 300));
+                }
+              }
+            }
+          } catch (chunkErr) {
+            console.log(`[Sales] Store ${key} 청크 오류 (${cursor.toISOString()}):`, chunkErr.message);
+          }
+
+          cursor = chunkEnd;
+          await new Promise(r => setTimeout(r, 300));
+        }
+
+        await scheduler.setConfig(configKey, now.toISOString());
+        totalInserted += storeInserted;
+        console.log(`[Sales] Store ${key} 수집 완료: ${storeInserted}건`);
+      } catch (storeErr) {
+        errors.push(`Store ${key}: ${storeErr.message}`);
+        console.error(`[Sales] Store ${key} 오류:`, storeErr.message);
+      }
+    }
+
+    res.json({ success: true, inserted: totalInserted, errors });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Sync API Routes ---
 
 // POST /api/sync/run - 수동 즉시 동기화
