@@ -519,12 +519,15 @@ app.post('/api/sync/test-connection', async (req, res) => {
 // POST /api/sync/save-keys - 스토어 API 키 저장
 app.post('/api/sync/save-keys', async (req, res) => {
   try {
-    const { store_a_client_id, store_a_client_secret, store_b_client_id, store_b_client_secret } = req.body;
+    const { store_a_client_id, store_a_client_secret, store_b_client_id, store_b_client_secret,
+            store_b_display_status, store_b_sale_status } = req.body;
     const upsertSql = 'INSERT INTO sync_config (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()';
     if (store_a_client_id) await query(upsertSql, ['store_a_client_id', store_a_client_id]);
     if (store_a_client_secret) await query(upsertSql, ['store_a_client_secret', store_a_client_secret]);
     if (store_b_client_id) await query(upsertSql, ['store_b_client_id', store_b_client_id]);
     if (store_b_client_secret) await query(upsertSql, ['store_b_client_secret', store_b_client_secret]);
+    if (store_b_display_status) await query(upsertSql, ['store_b_display_status', store_b_display_status]);
+    if (store_b_sale_status) await query(upsertSql, ['store_b_sale_status', store_b_sale_status]);
     scheduler.storeA = null;
     scheduler.storeB = null;
     res.json({ success: true });

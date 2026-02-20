@@ -449,6 +449,65 @@ class NaverCommerceClient {
     return this.apiCall('GET', '/v1/seller/addresses');
   }
 
+  // === Display status update ===
+
+  /**
+   * 상품 전시 상태 변경 (ON → SUSPENSION 등)
+   * @param {string} channelProductNo
+   * @param {string} statusType - 'ON', 'SUSPENSION', 'CLOSE'
+   */
+  async updateDisplayStatus(channelProductNo, statusType) {
+    const fullResponse = await this.getChannelProduct(channelProductNo);
+    const originProduct = fullResponse.originProduct || fullResponse;
+    const smartstoreCP = fullResponse.smartstoreChannelProduct || null;
+
+    // Deep copy
+    const origin = JSON.parse(JSON.stringify(originProduct));
+
+    // Remove read-only fields
+    const readOnlyKeys = [
+      'originProductNo', 'channelProducts', 'channelProductNo',
+      'registrationType', 'createdDate', 'modifiedDate',
+      'wishlisted', 'purchaseReviewCount', 'brandStoreInfo',
+      'knowledgeShoppingProductRegistration', 'productLogistics',
+      'commentCount', 'bestProductInfo', 'sellerManagementCode',
+    ];
+    for (const key of readOnlyKeys) {
+      delete origin[key];
+    }
+    if (origin.detailAttribute) {
+      delete origin.detailAttribute.productInfoProvidedNoticeV2;
+      delete origin.detailAttribute.certifications;
+      delete origin.detailAttribute.isbnInfo;
+    }
+    if (origin.deliveryInfo) {
+      delete origin.deliveryInfo.deliveryBundleGroupId;
+    }
+
+    // Build channel product
+    const channelProduct = {};
+    if (smartstoreCP) {
+      const cpReadOnly = ['channelProductNo', 'categoryChannelProductNo', 'registerDate', 'modifyDate'];
+      for (const [k, v] of Object.entries(smartstoreCP)) {
+        if (!cpReadOnly.includes(k) && v !== undefined && v !== null) {
+          channelProduct[k] = v;
+        }
+      }
+    }
+    channelProduct.channelProductName = smartstoreCP?.channelProductName || origin.name || '';
+    channelProduct.channelProductDisplayStatusType = statusType;
+    channelProduct.storeKeepExclusiveProduct = channelProduct.storeKeepExclusiveProduct ?? false;
+    channelProduct.naverShoppingRegistration = channelProduct.naverShoppingRegistration ?? true;
+
+    console.log(`[${this.storeName}] 전시 상태 변경: ${channelProductNo} → ${statusType}`);
+
+    return this.apiCall(
+      'PUT',
+      `/v2/products/channel-products/${channelProductNo}`,
+      { originProduct: origin, smartstoreChannelProduct: channelProduct }
+    );
+  }
+
   // === Connection test ===
 
   async testConnection() {

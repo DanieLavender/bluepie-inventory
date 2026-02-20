@@ -85,6 +85,8 @@ async function initDb() {
     ['sync_interval_minutes', '5'],
     ['product_match_mode', 'name'],
     ['last_sync_time', ''],
+    ['store_b_display_status', 'SUSPENSION'],
+    ['store_b_sale_status', 'SALE'],
   ];
   for (const [k, v] of configDefaults) {
     await query(

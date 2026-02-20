@@ -325,6 +325,12 @@ class SyncScheduler {
 
       const copyData = NaverCommerceClient.buildProductCopyData(sourceProduct, qty);
 
+      // B 스토어 상품 상태 설정 적용
+      const bDisplayStatus = await this.getConfig('store_b_display_status') || 'ON';
+      const bSaleStatus = await this.getConfig('store_b_sale_status') || 'SALE';
+      copyData.smartstoreChannelProduct.channelProductDisplayStatusType = bDisplayStatus;
+      copyData.originProduct.statusType = bSaleStatus;
+
       const optInfo = copyData.originProduct?.detailAttribute?.optionInfo;
       if (optInfo?.optionCombinations && optionName) {
         for (const opt of optInfo.optionCombinations) {
