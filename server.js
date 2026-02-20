@@ -252,7 +252,7 @@ app.get('/api/sales/debug', async (req, res) => {
     await initSyncClients();
     const now = new Date();
     const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const types = ['PAYED', 'DELIVERED', 'PURCHASE_DECIDED'];
+    const types = ['PAYED', 'PURCHASE_DECIDED'];
     const results = {};
 
     for (const t of types) {
@@ -270,6 +270,17 @@ app.get('/api/sales/debug', async (req, res) => {
         results[t] = { count, sample: data?.data?.lastChangeStatuses?.slice(0, 2) || [] };
       } catch (e) {
         results[t] = { error: e.message };
+      }
+    }
+
+    // 첫 번째 주문 상세도 조회하여 필드 구조 확인
+    const firstId = results.PAYED?.sample?.[0]?.productOrderId;
+    if (firstId) {
+      try {
+        const details = await scheduler.storeA.getProductOrderDetail([firstId]);
+        results.detailSample = details[0];
+      } catch (e) {
+        results.detailSample = { error: e.message };
       }
     }
 
