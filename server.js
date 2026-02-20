@@ -301,13 +301,14 @@ app.post('/api/sales/fetch', async (req, res) => {
       { key: 'A', client: scheduler.storeA, configKey: 'sales_last_fetch_a' },
     ];
 
-    // 리셋 요청 시 last_fetch 초기화
+    // 리셋 요청 시 기존 데이터 삭제 + last_fetch 초기화
     if (resetDays) {
+      await query('DELETE FROM sales_orders');
       const resetTime = new Date(Date.now() - resetDays * 24 * 60 * 60 * 1000).toISOString();
       for (const s of stores) {
         await scheduler.setConfig(s.configKey, resetTime);
       }
-      console.log(`[Sales] last_fetch 리셋: ${resetDays}일 전으로`);
+      console.log(`[Sales] 전체 리셋: 기존 데이터 삭제 + ${resetDays}일 전부터 재수집`);
     }
 
     let totalInserted = 0;
@@ -344,7 +345,7 @@ app.post('/api/sales/fetch', async (req, res) => {
                 for (const detail of details) {
                   const po = detail.productOrder || detail;
                   const productOrderId = po.productOrderId || '';
-                  const orderDate = po.paymentDate || po.orderDate || po.placeOrderDate || chunkEnd.toISOString();
+                  const orderDate = po.placeOrderDate || po.paymentDate || po.orderDate || chunkEnd.toISOString();
                   const productName = po.productName || '';
                   const optionName = po.optionName || null;
                   const qty = po.quantity || 1;

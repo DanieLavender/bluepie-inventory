@@ -836,7 +836,57 @@
         }
         .summary-card .summary-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
         .summary-card .summary-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
-        .sales-summary-cards { grid-template-columns: repeat(4, 1fr); }
+        .sales-hero {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 28px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+        .sales-hero-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .sales-hero-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: -1px;
+        }
+        .sales-hero-orders {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+        .sales-hero-compare {
+            display: flex;
+            gap: 20px;
+        }
+        .sales-compare-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            padding: 14px 20px;
+            text-align: center;
+        }
+        .sales-compare-label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .sales-compare-value {
+            display: block;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
         .settings-section { margin-bottom: 24px; }
         .settings-section h3 {
             font-size: 15px;
@@ -1036,6 +1086,9 @@
 
             .toast { bottom: 16px; left: 16px; right: 16px; text-align: center; }
             .summary-cards { grid-template-columns: 1fr; }
+            .sales-hero { flex-direction: column; align-items: stretch; padding: 20px; }
+            .sales-hero-value { font-size: 28px; }
+            .sales-hero-compare { justify-content: center; }
             .brand-card-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .setting-row { flex-direction: column; align-items: flex-start; gap: 8px; }
             .setting-row input[type="text"], .setting-row select { width: 100%; }
@@ -1272,23 +1325,22 @@
 
             <!-- ===== PAGE: Sales (오늘 현황) ===== -->
             <section class="page-section" id="page-sales" style="display:none">
-                <!-- 요약 카드 -->
-                <div class="summary-cards sales-summary-cards">
-                    <div class="summary-card">
-                        <div class="summary-value" id="salesTodayRevenue">-</div>
-                        <div class="summary-label">오늘 매출</div>
+                <!-- 오늘 매출 히어로 -->
+                <div class="sales-hero">
+                    <div class="sales-hero-main">
+                        <div class="sales-hero-label">오늘 매출</div>
+                        <div class="sales-hero-value" id="salesTodayRevenue">-</div>
+                        <div class="sales-hero-orders" id="salesTodayOrders">주문 -건 · 평균 -</div>
                     </div>
-                    <div class="summary-card">
-                        <div class="summary-value" id="salesTodayOrders">-</div>
-                        <div class="summary-label">오늘 주문</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-value" id="salesTodayAvg">-</div>
-                        <div class="summary-label">평균 단가</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-value" id="salesYestComp">-</div>
-                        <div class="summary-label">어제 매출</div>
+                    <div class="sales-hero-compare">
+                        <div class="sales-compare-item">
+                            <span class="sales-compare-label">어제</span>
+                            <span class="sales-compare-value" id="salesYestRevenue">-</span>
+                        </div>
+                        <div class="sales-compare-item">
+                            <span class="sales-compare-label">어제 주문</span>
+                            <span class="sales-compare-value" id="salesYestOrders">-</span>
+                        </div>
                     </div>
                 </div>
 
@@ -2555,9 +2607,10 @@
             const res = await fetch('/api/sales/stats');
             const data = await res.json();
             document.getElementById('salesTodayRevenue').textContent = formatCurrency(data.todayRevenue);
-            document.getElementById('salesTodayOrders').textContent = data.todayOrders + '건';
-            document.getElementById('salesTodayAvg').textContent = formatCurrency(data.avgPrice);
-            document.getElementById('salesYestComp').textContent = formatCurrency(data.yesterdayRevenue);
+            document.getElementById('salesTodayOrders').textContent =
+                `주문 ${data.todayOrders}건 · 평균 ${formatCurrency(data.avgPrice)}`;
+            document.getElementById('salesYestRevenue').textContent = formatCurrency(data.yesterdayRevenue);
+            document.getElementById('salesYestOrders').textContent = data.yesterdayOrders + '건';
         } catch (e) {
             console.error('매출 통계 로딩 오류:', e);
         }
@@ -2615,7 +2668,7 @@
                     : data.errors.join('; ');
                 showToast(msg, 'error');
             } else if (data.success) {
-                showToast(`${data.inserted}건 수집 완료`, data.inserted > 0 ? 'success' : 'info');
+                showToast(`${data.inserted}건 수집`, data.inserted > 0 ? 'success' : 'info');
                 loadSalesStats();
                 loadTodayOrders();
             } else {

@@ -438,7 +438,7 @@ class SyncScheduler {
                       [
                         key,
                         po.productOrderId || '',
-                        po.paymentDate || po.orderDate || po.placeOrderDate || chunkEnd.toISOString(),
+                        po.placeOrderDate || po.paymentDate || po.orderDate || chunkEnd.toISOString(),
                         po.productName || '',
                         po.optionName || null,
                         po.quantity || 1,
