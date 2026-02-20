@@ -371,7 +371,13 @@ app.post('/api/sales/fetch', async (req, res) => {
       }
     }
 
-    res.json({ success: true, inserted: totalInserted, errors });
+    const hasErrors = errors.length > 0;
+    res.json({
+      success: !hasErrors || totalInserted > 0,
+      inserted: totalInserted,
+      errors,
+      message: hasErrors ? errors.join('; ') : `${totalInserted}건 수집 완료`,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

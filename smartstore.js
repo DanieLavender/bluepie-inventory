@@ -195,6 +195,7 @@ class NaverCommerceClient {
     const typesToCheck = ['PAYED', 'DELIVERED', 'PURCHASE_DECIDED'];
     const seen = new Set();
     const allOrderIds = [];
+    const errors = [];
 
     for (const changeType of typesToCheck) {
       try {
@@ -221,9 +222,15 @@ class NaverCommerceClient {
           }
         }
       } catch (e) {
-        console.log(`[${this.storeName}] ${changeType} 조회 오류 (무시):`, e.message);
+        errors.push(e.message);
+        console.log(`[${this.storeName}] ${changeType} 조회 오류:`, e.message);
       }
       await this.sleep(300);
+    }
+
+    // 모든 타입이 실패하면 첫 번째 에러를 throw
+    if (errors.length === typesToCheck.length) {
+      throw new Error(errors[0]);
     }
 
     return allOrderIds;

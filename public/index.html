@@ -2778,8 +2778,15 @@
         try {
             const res = await fetch('/api/sales/fetch', { method: 'POST' });
             const data = await res.json();
-            if (data.success) {
-                showToast(`매출 데이터 ${data.inserted}건 수집 완료`, 'success');
+            if (data.errors && data.errors.length > 0) {
+                const msg = data.errors[0].includes('IP_NOT_ALLOWED')
+                    ? '네이버 API IP 차단: 허용 IP 목록에 서버 IP를 추가해주세요'
+                    : data.errors[0].includes('토큰 발급 실패')
+                    ? 'API 인증 실패: 키를 확인해주세요'
+                    : data.errors.join('; ');
+                showToast(msg, 'error');
+            } else if (data.success) {
+                showToast(`매출 데이터 ${data.inserted}건 수집 완료`, data.inserted > 0 ? 'success' : 'info');
                 loadSalesStats();
                 loadSalesSummary();
                 loadRecentOrders();
