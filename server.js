@@ -13,6 +13,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- API Routes ---
 
+// GET /api/health - 헬스체크 (서버 keep-alive용)
+app.get('/api/health', async (req, res) => {
+  const status = await scheduler.getStatus();
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    syncActive: status.schedulerActive,
+    lastSync: status.lastSyncTime,
+  });
+});
+
 // GET /api/inventory - 전체 재고 조회 (검색, 필터, 정렬, 페이지네이션)
 app.get('/api/inventory', async (req, res) => {
   try {
@@ -590,5 +601,14 @@ async function initSyncClients() {
 
   app.listen(PORT, () => {
     console.log(`블루파이 재고관리 서버 실행중: http://localhost:${PORT}`);
+
+    // Render 무료 플랜 keep-alive: 14분마다 self-ping으로 spin-down 방지
+    if (process.env.RENDER_EXTERNAL_URL || process.env.NODE_ENV === 'production') {
+      const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+      setInterval(() => {
+        fetch(`${baseUrl}/api/health`).catch(() => {});
+      }, 14 * 60 * 1000);
+      console.log('[Keep-Alive] 14분 간격 self-ping 활성화');
+    }
   });
 })();

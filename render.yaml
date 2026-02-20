@@ -25,3 +25,5 @@ services:
         sync: false
       - key: DB_NAME
         sync: false
+      - key: RENDER_EXTERNAL_URL
+        value: https://bluepie-inventory.onrender.com
