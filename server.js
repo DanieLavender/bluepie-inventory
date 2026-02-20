@@ -278,7 +278,18 @@ app.get('/api/sales/debug', async (req, res) => {
     if (firstId) {
       try {
         const details = await scheduler.storeA.getProductOrderDetail([firstId]);
-        results.detailSample = details[0];
+        const detail = details[0];
+        const po = detail?.productOrder || detail;
+        results.detailSample = detail;
+        results.dateFieldAnalysis = {
+          detailKeys: Object.keys(detail || {}),
+          hasProductOrder: !!detail?.productOrder,
+          productOrderKeys: detail?.productOrder ? Object.keys(detail.productOrder) : [],
+          placeOrderDate: po?.placeOrderDate || null,
+          paymentDate: po?.paymentDate || null,
+          orderDate: po?.orderDate || null,
+          poPlaceOrderDate: detail?.productOrder?.placeOrderDate || null,
+        };
       } catch (e) {
         results.detailSample = { error: e.message };
       }
@@ -354,9 +365,13 @@ app.post('/api/sales/fetch', async (req, res) => {
                   const status = po.productOrderStatus || '';
                   const channelProductNo = String(po.channelProductNo || po.productId || '');
 
-                  // 첫 실행 시 필드 구조 로깅
+                  // 첫 실행 시 필드 구조 로깅 (detail 전체 키 + po 날짜 필드)
                   if (storeInserted === 0 && i === 0) {
-                    console.log(`[Sales] Store ${key} 주문 상세 필드 샘플:`, JSON.stringify(po).slice(0, 800));
+                    console.log(`[Sales] detail 키:`, Object.keys(detail));
+                    console.log(`[Sales] detail.productOrder 존재:`, !!detail.productOrder);
+                    console.log(`[Sales] po 날짜 필드: placeOrderDate=${po.placeOrderDate}, paymentDate=${po.paymentDate}, orderDate=${po.orderDate}`);
+                    console.log(`[Sales] 최종 orderDate:`, orderDate);
+                    console.log(`[Sales] po 샘플 (500자):`, JSON.stringify(po).slice(0, 500));
                   }
 
                   try {
