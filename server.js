@@ -169,6 +169,17 @@ app.post('/api/inventory/delete-bulk', async (req, res) => {
   }
 });
 
+// GET /api/server-ip - 서버 아웃바운드 IP 확인 (임시)
+app.get('/api/server-ip', async (req, res) => {
+  try {
+    const r = await fetch('https://api.ipify.org?format=json');
+    const data = await r.json();
+    res.json({ outboundIp: data.ip });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Sales API Routes ---
 
 // GET /api/sales/stats - 매출 요약 (이번달/전월)
