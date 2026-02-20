@@ -301,6 +301,53 @@ app.get('/api/sales/debug', async (req, res) => {
   }
 });
 
+// GET /api/sales/debug-fetch - fetch 과정 시뮬레이션 (INSERT 없이 추출 값 반환)
+app.get('/api/sales/debug-fetch', async (req, res) => {
+  try {
+    await initSyncClients();
+    const now = new Date();
+    const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // 1) 주문 ID 가져오기
+    const orderIds = await scheduler.storeA.getOrders(from.toISOString(), now.toISOString());
+    if (orderIds.length === 0) return res.json({ message: 'No orders found', range: { from: from.toISOString(), to: now.toISOString() } });
+
+    // 2) 상세 조회 (최대 5건)
+    const batch = orderIds.slice(0, 5);
+    const details = await scheduler.storeA.getProductOrderDetail(batch);
+
+    // 3) fetch 코드와 동일한 추출 로직 적용
+    const chunkEnd = now;
+    const extracted = details.map((detail, idx) => {
+      const po = detail.productOrder || detail;
+      return {
+        idx,
+        detailKeys: Object.keys(detail),
+        hasProductOrder: !!detail.productOrder,
+        poType: typeof detail.productOrder,
+        // 날짜 필드 원본값
+        rawPlaceOrderDate: detail.productOrder?.placeOrderDate,
+        rawPaymentDate: detail.productOrder?.paymentDate,
+        rawOrderDate: detail.productOrder?.orderDate,
+        // po 경유 값
+        poPlaceOrderDate: po.placeOrderDate,
+        poPaymentDate: po.paymentDate,
+        poOrderDate: po.orderDate,
+        // 최종 계산값
+        finalOrderDate: po.placeOrderDate || po.paymentDate || po.orderDate || chunkEnd.toISOString(),
+        fallbackUsed: !po.placeOrderDate && !po.paymentDate && !po.orderDate,
+        // 기타 필드
+        productOrderId: po.productOrderId,
+        productName: (po.productName || '').slice(0, 30),
+      };
+    });
+
+    res.json({ orderIdsCount: orderIds.length, detailsCount: details.length, extracted });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/sales/fetch - 수동 매출 데이터 수집
 app.post('/api/sales/fetch', async (req, res) => {
   try {
