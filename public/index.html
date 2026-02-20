@@ -2628,16 +2628,20 @@
                 return;
             }
 
+            const cancelStatuses = ['CANCELED', 'CANCELED_BY_NOPAYMENT', 'RETURNED', 'EXCHANGED'];
             tbody.innerHTML = data.map(row => {
                 const date = new Date(row.order_date);
                 const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
                 const name = (row.product_name || '').length > 35
                     ? row.product_name.slice(0, 35) + '...'
                     : (row.product_name || '-');
+                const isCanceled = cancelStatuses.includes(row.product_order_status);
+                const rowStyle = isCanceled ? 'text-decoration:line-through;color:var(--text-muted)' : '';
+                const statusBadge = isCanceled ? ' <span style="font-size:11px;color:#ef4444">취소</span>' : '';
                 return `
-                    <tr>
+                    <tr style="${rowStyle}">
                         <td>${timeStr}</td>
-                        <td title="${row.product_name || ''}">${name}</td>
+                        <td title="${row.product_name || ''}">${name}${statusBadge}</td>
                         <td style="text-align:right">${row.qty}</td>
                         <td style="text-align:right;font-weight:600">${formatCurrency(row.total_amount)}</td>
                     </tr>

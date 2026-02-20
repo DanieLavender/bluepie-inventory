@@ -190,13 +190,14 @@ app.get('/api/sales/stats', async (req, res) => {
     const todayKST = kstNow.toISOString().slice(0, 10);
     const yesterdayKST = new Date(kstNow.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    // order_date(UTC)를 KST로 변환 후 날짜 비교
+    // order_date(UTC)를 KST로 변환 후 날짜 비교, 취소 건 제외
+    const excludeStatuses = "('CANCELED', 'CANCELED_BY_NOPAYMENT', 'RETURNED', 'EXCHANGED')";
     const today = await query(
-      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ?',
+      `SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ? AND product_order_status NOT IN ${excludeStatuses}`,
       [todayKST]
     );
     const yest = await query(
-      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ?',
+      `SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ? AND product_order_status NOT IN ${excludeStatuses}`,
       [yesterdayKST]
     );
 
