@@ -3,3 +3,5 @@ inventory.db
 inventory_data.json
 *.xlsx
 .env
+.claude/
+inventory.html
