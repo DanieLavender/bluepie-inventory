@@ -797,6 +797,30 @@
         .log-date { white-space: nowrap; font-size: 12px; }
         .log-product { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .log-message { font-size: 12px; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* 로그 카드 (모바일용) */
+        .log-cards { display: none; }
+        .log-card-item {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .log-card-item:last-child { border-bottom: none; }
+        .log-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .log-card-top .log-card-date { font-size: 11px; color: var(--text-muted); }
+        .log-card-top .log-card-status { font-size: 11px; font-weight: 600; }
+        .log-card-product { font-size: 13px; font-weight: 500; margin-bottom: 4px; word-break: break-word; }
+        .log-card-bottom {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .log-card-qty { font-size: 12px; color: var(--text-secondary); }
+        .log-card-msg { font-size: 11px; color: var(--text-muted); word-break: break-word; }
         .type-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -1105,23 +1129,9 @@
             .log-header { flex-wrap: wrap; gap: 8px; }
             .log-filters { width: 100%; }
             .log-filters .filter-select { flex: 1; min-width: 0 !important; font-size: 16px; padding: 10px 28px 10px 10px; }
-            /* 로그 테이블: 모바일에서 컬럼 너비 고정 */
-            #page-log .shell-table { table-layout: fixed; width: 100%; }
-            #page-log .shell-table th:nth-child(1),
-            #page-log .shell-table td:nth-child(1) { width: 22%; } /* 일시 */
-            #page-log .shell-table th:nth-child(2),
-            #page-log .shell-table td:nth-child(2) { width: 16%; } /* 유형 */
-            #page-log .shell-table th:nth-child(3),
-            #page-log .shell-table td:nth-child(3) { width: 25%; } /* 상품명 */
-            #page-log .shell-table th:nth-child(4),
-            #page-log .shell-table td:nth-child(4) { width: 8%; }  /* 수량 */
-            #page-log .shell-table th:nth-child(5),
-            #page-log .shell-table td:nth-child(5) { width: 10%; } /* 상태 */
-            #page-log .shell-table th:nth-child(6),
-            #page-log .shell-table td:nth-child(6) { width: 19%; } /* 메시지 */
-            .log-date { font-size: 10px; word-break: break-all; white-space: normal; }
-            .log-product { max-width: none; font-size: 11px; white-space: normal; word-break: break-all; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; }
-            .log-message { max-width: none; font-size: 10px; white-space: normal; word-break: break-all; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; }
+            /* 로그: 모바일에서 테이블 숨기고 카드 표시 */
+            .log-table-wrap { display: none !important; }
+            .log-cards { display: block !important; }
         }
 
         /* ===== 33. Responsive: Small ===== */
@@ -1429,7 +1439,7 @@
                             </select>
                         </div>
                     </div>
-                    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+                    <div class="log-table-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
                         <table class="shell-table">
                             <thead>
                                 <tr><th>일시</th><th>유형</th><th>상품명</th><th>수량</th><th>상태</th><th>메시지</th></tr>
@@ -1438,6 +1448,9 @@
                                 <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">동기화 로그가 없습니다.</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="log-cards" id="logCardsBody">
+                        <div style="text-align:center;padding:40px;color:var(--text-muted);">동기화 로그가 없습니다.</div>
                     </div>
                     <div class="table-footer" id="logTableFooter" style="display:none;">
                         <span class="table-footer-info" id="logFooterInfo"></span>
@@ -2615,7 +2628,7 @@
                 'skipped': '스킵',
             };
 
-            tbody.innerHTML = data.items.map(log => {
+            const logRows = data.items.map(log => {
                 const d = new Date(log.created_at);
                 const dateStr = isNaN(d.getTime()) ? (log.created_at || '-') :
                     d.toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12: false });
@@ -2627,18 +2640,34 @@
 
                 const productName = log.product_name || '-';
                 const msg = log.message || '-';
-                const msgId = 'logmsg-' + log.id;
-                return `<tr>
-                    <td class="log-date">${dateStr}</td>
-                    <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
-                    <td class="log-product" title="${escapeHtml(productName)}">${escapeHtml(productName)}</td>
-                    <td>${log.qty || '-'}</td>
-                    <td style="color:${statusColor};font-weight:600;font-size:12px;">${statusLabel}</td>
-                    <td class="log-message" title="${escapeHtml(msg)}">
-                        <span>${escapeHtml(msg.length > 50 ? msg.slice(0, 50) + '...' : msg)}</span>
+                return { log, dateStr, typeLabel, typeClass, statusLabel, statusColor, productName, msg };
+            });
+
+            // PC: 테이블
+            tbody.innerHTML = logRows.map(r => `<tr>
+                    <td class="log-date">${r.dateStr}</td>
+                    <td><span class="type-badge ${r.typeClass}">${r.typeLabel}</span></td>
+                    <td class="log-product" title="${escapeHtml(r.productName)}">${escapeHtml(r.productName)}</td>
+                    <td>${r.log.qty || '-'}</td>
+                    <td style="color:${r.statusColor};font-weight:600;font-size:12px;">${r.statusLabel}</td>
+                    <td class="log-message" title="${escapeHtml(r.msg)}">
+                        <span>${escapeHtml(r.msg.length > 50 ? r.msg.slice(0, 50) + '...' : r.msg)}</span>
                     </td>
-                </tr>`;
-            }).join('');
+                </tr>`).join('');
+
+            // 모바일: 카드
+            const cardsBody = document.getElementById('logCardsBody');
+            cardsBody.innerHTML = logRows.map(r => `<div class="log-card-item">
+                    <div class="log-card-top">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span class="type-badge ${r.typeClass}">${r.typeLabel}</span>
+                            <span class="log-card-date">${r.dateStr}</span>
+                        </div>
+                        <span class="log-card-status" style="color:${r.statusColor}">${r.statusLabel}</span>
+                    </div>
+                    <div class="log-card-product">${escapeHtml(r.productName)}${r.log.qty ? ' <span class="log-card-qty">x' + r.log.qty + '</span>' : ''}</div>
+                    ${r.msg !== '-' ? '<div class="log-card-msg">' + escapeHtml(r.msg) + '</div>' : ''}
+                </div>`).join('');
 
             // Pagination
             footer.style.display = 'flex';
