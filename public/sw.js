@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'bluefi-v1';
+const CACHE_VERSION = 'bluefi-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -54,18 +54,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first with network fallback
+  // Static assets: network-first with cache fallback
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok && url.origin === self.location.origin) {
           const clone = response.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
         }
         return response;
-      });
-    })
+      })
+      .catch(() => caches.match(request))
   );
 });
 
