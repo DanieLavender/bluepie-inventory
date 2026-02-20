@@ -185,17 +185,19 @@ app.get('/api/server-ip', async (req, res) => {
 // GET /api/sales/stats - 오늘 매출 요약 (어제 비교)
 app.get('/api/sales/stats', async (req, res) => {
   try {
-    const now = new Date();
-    const todayStart = now.toISOString().slice(0, 10);
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // KST 기준 오늘/어제 날짜 계산
+    const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayKST = kstNow.toISOString().slice(0, 10);
+    const yesterdayKST = new Date(kstNow.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    // order_date(UTC)를 KST로 변환 후 날짜 비교
     const today = await query(
-      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(order_date) = ?',
-      [todayStart]
+      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ?',
+      [todayKST]
     );
     const yest = await query(
-      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(order_date) = ?',
-      [yesterday]
+      'SELECT COUNT(*) as orders, COALESCE(SUM(total_amount), 0) as revenue FROM sales_orders WHERE DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ?',
+      [yesterdayKST]
     );
 
     const todayRevenue = Number(today[0].revenue);
@@ -228,7 +230,7 @@ app.get('/api/sales/recent', async (req, res) => {
       params.push(store);
     }
     if (date) {
-      conditions.push('DATE(order_date) = ?');
+      conditions.push('DATE(DATE_ADD(order_date, INTERVAL 9 HOUR)) = ?');
       params.push(date);
     }
 
