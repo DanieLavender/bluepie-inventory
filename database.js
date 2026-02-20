@@ -11,6 +11,7 @@ function getPool() {
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
       charset: 'utf8mb4',
+      timezone: '+09:00',
       waitForConnections: true,
       connectionLimit: 10,
     });
@@ -95,6 +96,20 @@ async function initDb() {
       fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+
+  // 기존 UTC 저장 order_date를 KST로 마이그레이션 (1회성)
+  const [migrated] = await getPool().query(
+    "SELECT value FROM sync_config WHERE `key` = 'sales_tz_migrated'"
+  ).catch(() => [[]]);
+  if (!migrated || migrated.length === 0 || migrated[0]?.value !== 'true') {
+    await query(
+      "UPDATE sales_orders SET order_date = DATE_ADD(order_date, INTERVAL 9 HOUR) WHERE order_date IS NOT NULL"
+    ).catch(() => {});
+    await query(
+      "INSERT INTO sync_config (`key`, value) VALUES ('sales_tz_migrated', 'true') ON DUPLICATE KEY UPDATE value = 'true'"
+    ).catch(() => {});
+    console.log('[DB] sales_orders order_date UTC→KST 마이그레이션 완료');
+  }
 
   // Seed sync_config defaults
   const configDefaults = [
