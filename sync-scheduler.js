@@ -214,6 +214,107 @@ class SyncScheduler {
     } else {
       await this.copyAndCreateInStoreB(runId, detail, channelProductNo, productName, optionName, qty, productOrderId);
     }
+
+    // B 스토어 처리 성공 후 → inventory 테이블에 재고 반영
+    try {
+      const invResult = await this.updateInventoryFromReturn(runId, productName, optionName, qty);
+      if (invResult) {
+        const invMsg = invResult.action === 'created'
+          ? `신규 재고: ${invResult.name} (${invResult.color}) ${invResult.qty}개`
+          : `재고 반영: ${productName} (${optionName || ''}) +${qty}개`;
+        await this.sendPushNotification('재고 자동 반영', invMsg);
+      }
+    } catch (invErr) {
+      console.error(`[Sync→Inventory] 재고 반영 실패 (무시): ${invErr.message}`);
+    }
+  }
+
+  // === Update inventory from return ===
+
+  async updateInventoryFromReturn(runId, productName, optionName, qty) {
+    const color = (optionName || '').trim();
+    if (!productName) {
+      console.log(`[Sync→Inventory] 상품명 없음, 스킵`);
+      return null;
+    }
+
+    try {
+      // 스토어 상품명 정규화: [hm], (오늘출발) 등 제거
+      const cleanName = productName
+        .replace(/\[.*?\]/g, '')
+        .replace(/\(.*?\)/g, '')
+        .trim();
+
+      // 브랜드 코드 추출 (상품명 앞 2글자 알파벳)
+      const brandMatch = cleanName.match(/^([a-zA-Z]{2})\s/);
+      const brand = brandMatch ? brandMatch[1].toLowerCase() : '';
+
+      // 핵심 키워드 (브랜드 제거)
+      const keywords = cleanName.replace(/^[a-zA-Z]{2}\s+/, '').trim();
+
+      // 1단계: 정확 매칭 — name + color 일치
+      let rows = await query(
+        'SELECT * FROM inventory WHERE name = ? AND color = ? LIMIT 1',
+        [cleanName, color]
+      );
+
+      if (rows.length > 0) {
+        const item = rows[0];
+        const newQty = item.qty + qty;
+        await query('UPDATE inventory SET qty = ?, updated_at = NOW() WHERE id = ?', [newQty, item.id]);
+        await this.logSync(runId, 'inventory_update', null, null, null, null,
+          productName, optionName, qty, 'success',
+          `정확 매칭 → ${item.name} (${item.color}) ${item.qty}→${newQty}`);
+        console.log(`[Sync→Inventory] 정확 매칭: ${item.name} (${item.color}) ${item.qty}→${newQty}`);
+        return { action: 'updated', matchType: 'exact', inventoryId: item.id, oldQty: item.qty, newQty };
+      }
+
+      // 2단계: 유사 매칭 — 키워드 LIKE + 컬러 LIKE
+      if (keywords && color) {
+        rows = await query(
+          'SELECT * FROM inventory WHERE name LIKE ? AND color LIKE ? LIMIT 1',
+          [`%${keywords}%`, `%${color}%`]
+        );
+
+        if (rows.length > 0) {
+          const item = rows[0];
+          const newQty = item.qty + qty;
+          await query('UPDATE inventory SET qty = ?, updated_at = NOW() WHERE id = ?', [newQty, item.id]);
+          await this.logSync(runId, 'inventory_update', null, null, null, null,
+            productName, optionName, qty, 'success',
+            `유사 매칭 → ${item.name} (${item.color}) ${item.qty}→${newQty}`);
+          console.log(`[Sync→Inventory] 유사 매칭: ${item.name} (${item.color}) ${item.qty}→${newQty}`);
+          return { action: 'updated', matchType: 'fuzzy', inventoryId: item.id, oldQty: item.qty, newQty };
+        }
+      }
+
+      // 3단계: 매칭 실패 → 신규 등록
+      const newName = cleanName || productName.trim();
+      // 브랜드: 추출된 코드가 기존 브랜드에 있으면 사용, 없으면 그대로 새 브랜드로 등록
+      const existingBrands = await query("SELECT DISTINCT brand FROM inventory WHERE brand != ''");
+      const brandSet = new Set(existingBrands.map(r => r.brand));
+      const newBrand = brand || '';
+      // 브랜드가 있으면(기존이든 새로운이든) 그대로 사용
+      if (newBrand && !brandSet.has(newBrand)) {
+        console.log(`[Sync→Inventory] 새 브랜드 등록: ${newBrand}`);
+      }
+
+      const result = await query(
+        'INSERT INTO inventory (name, color, qty, brand) VALUES (?, ?, ?, ?)',
+        [newName, color || '기본', qty, newBrand]
+      );
+      await this.logSync(runId, 'inventory_update', null, null, null, null,
+        productName, optionName, qty, 'success',
+        `신규 등록 → ${newName} (${color || '기본'}) ${qty}개${newBrand ? ` [${newBrand}]` : ''}`);
+      console.log(`[Sync→Inventory] 신규 등록: ${newName} (${color || '기본'}) ${qty}개`);
+      return { action: 'created', inventoryId: result.insertId, name: newName, color: color || '기본', qty };
+
+    } catch (e) {
+      await this.logSync(runId, 'inventory_update', null, null, null, null,
+        productName, optionName, qty, 'fail', `재고 반영 오류: ${e.message}`);
+      console.error(`[Sync→Inventory] 오류: ${productName}`, e.message);
+      return null;
+    }
   }
 
   // === Increase Store B stock ===
@@ -485,7 +586,7 @@ class SyncScheduler {
                   const rawDate = order.paymentDate || order.orderDate || po.placeOrderDate || chunkEnd.toISOString();
                   const orderDate = new Date(rawDate).toISOString();
                   try {
-                    await query(
+                    const insertResult = await query(
                       `INSERT IGNORE INTO sales_orders (store, product_order_id, order_date, product_name, option_name, qty, unit_price, total_amount, product_order_status, channel_product_no)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                       [
@@ -501,7 +602,7 @@ class SyncScheduler {
                         String(po.channelProductNo || po.productId || ''),
                       ]
                     );
-                    inserted++;
+                    if (insertResult.affectedRows > 0) inserted++;
                   } catch (dbErr) {
                     // duplicate ignored
                   }
@@ -554,13 +655,13 @@ class SyncScheduler {
             const items = await coupang.getOrderItems(cursor.toISOString(), chunkEnd.toISOString());
             for (const item of items) {
               try {
-                await query(
+                const insertResult = await query(
                   `INSERT IGNORE INTO sales_orders (store, product_order_id, order_date, product_name, option_name, qty, unit_price, total_amount, product_order_status, channel_product_no)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                   ['C', item.productOrderId, item.orderDate, item.productName, item.optionName,
                    item.qty, item.unitPrice, item.totalAmount, item.status, item.channelProductNo]
                 );
-                inserted++;
+                if (insertResult.affectedRows > 0) inserted++;
               } catch (dbErr) { }
             }
           } catch (chunkErr) {
