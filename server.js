@@ -120,13 +120,17 @@ app.post('/api/inventory', async (req, res) => {
     const rows = await query('SELECT * FROM inventory WHERE id = ?', [result.insertId]);
 
     // 네이버 반품에서 불러온 건이면 sync_log에 기록 → 자동 동기화 중복 방지
+    // 합산 선택 시 콤마 구분된 여러 productOrderId → 각각 기록
     if (productOrderId) {
       try {
-        await query(
-          `INSERT INTO sync_log (run_id, type, store_from, store_to, product_order_id, channel_product_no, product_name, product_option, qty, status, message)
-           VALUES ('manual', 'inventory_update', 'A', NULL, ?, ?, ?, ?, ?, 'success', '수동 등록 (네이버 불러오기)')`,
-          [productOrderId, channelProductNo || null, trimmedName, trimmedColor, qtyVal]
-        );
+        const orderIdList = productOrderId.includes(',') ? productOrderId.split(',') : [productOrderId];
+        for (const oid of orderIdList) {
+          await query(
+            `INSERT INTO sync_log (run_id, type, store_from, store_to, product_order_id, channel_product_no, product_name, product_option, qty, status, message)
+             VALUES ('manual', 'inventory_update', 'A', NULL, ?, ?, ?, ?, ?, 'success', '수동 등록 (네이버 불러오기)')`,
+            [oid.trim(), channelProductNo || null, trimmedName, trimmedColor, qtyVal]
+          );
+        }
       } catch (logErr) {
         console.log('[Inventory] sync_log 기록 실패 (무시):', logErr.message);
       }
@@ -510,9 +514,12 @@ app.get('/api/sync/returnable-items', async (req, res) => {
 
     // 2. 상세 조회
     const orderIds = returnableOrders.map(o => o.productOrderId);
-    const claimStatusMap = {};
+    const statusInfoMap = {};
     for (const o of returnableOrders) {
-      claimStatusMap[o.productOrderId] = o.claimStatus;
+      statusInfoMap[o.productOrderId] = {
+        claimStatus: o.claimStatus,
+        lastChangedDate: o.lastChangedDate,
+      };
     }
 
     const details = await scheduler.storeA.getProductOrderDetail(orderIds);
@@ -534,7 +541,9 @@ app.get('/api/sync/returnable-items', async (req, res) => {
     const items = [];
     for (const detail of details) {
       const po = detail.productOrder || detail;
+      const order = detail.order || {};
       const productOrderId = po.productOrderId || '';
+      const info = statusInfoMap[productOrderId] || {};
 
       items.push({
         productOrderId,
@@ -542,7 +551,9 @@ app.get('/api/sync/returnable-items', async (req, res) => {
         optionName: po.optionName || null,
         qty: po.quantity || 1,
         channelProductNo: String(po.channelProductNo || po.productId || ''),
-        claimStatus: claimStatusMap[productOrderId] || '',
+        claimStatus: info.claimStatus || '',
+        lastChangedDate: info.lastChangedDate || null,
+        ordererName: order.ordererName || po.ordererName || '',
         alreadyAdded: processedIds.has(productOrderId),
       });
     }

@@ -627,7 +627,7 @@ class NaverCommerceClient {
         seen.add(s.productOrderId);
         return true;
       })
-      .map(s => ({ productOrderId: s.productOrderId, claimStatus: s.claimStatus }));
+      .map(s => ({ productOrderId: s.productOrderId, claimStatus: s.claimStatus, lastChangedDate: s.lastChangedDate || null }));
   }
 
   // === Connection test ===

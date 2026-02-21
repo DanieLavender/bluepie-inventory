@@ -2475,6 +2475,9 @@
                 return;
             }
 
+            // 전역에 저장 (합산 선택용)
+            window._naverReturnItems = items;
+
             // 상태별 그룹
             const returnDone = items.filter(i => i.claimStatus === 'RETURN_DONE');
             const collectDone = items.filter(i => i.claimStatus === 'COLLECT_DONE');
@@ -2488,6 +2491,33 @@
                 html += '<div class="naver-return-group">&#128230; 수거완료 (' + collectDone.length + ')</div>';
                 html += collectDone.map(i => buildReturnItemHtml(i)).join('');
             }
+
+            // 동일 상품 색상별 합산 그룹
+            const groupMap = {};
+            for (const item of items) {
+                if (item.alreadyAdded) continue;
+                const key = item.productName || '';
+                if (!groupMap[key]) groupMap[key] = [];
+                groupMap[key].push(item);
+            }
+            const multiColorGroups = Object.entries(groupMap).filter(([, arr]) => arr.length >= 2);
+            if (multiColorGroups.length > 0) {
+                html += '<div class="naver-return-group">&#127912; 색상별 합산 (' + multiColorGroups.length + '개 상품)</div>';
+                for (const [prodName, arr] of multiColorGroups) {
+                    const totalQty = arr.reduce((s, i) => s + i.qty, 0);
+                    const colors = arr.map(i => i.optionName || '기본').join(', ');
+                    const cpNo = arr[0].channelProductNo || '';
+                    const orderIds = arr.map(i => i.productOrderId).join(',');
+                    html += '<div class="naver-return-item" onclick="selectNaverReturnGroup(\'' + orderIds.replace(/'/g, "\\'") + '\')" title="' + colors + '">'
+                        + '<span class="item-name" style="display:flex;flex-direction:column;gap:1px;">'
+                        + '<span>' + prodName + '</span>'
+                        + '<span style="font-size:10px;color:var(--text-muted);">'
+                        + arr.map(i => (i.optionName || '기본') + ' ' + i.qty + '개').join(' · ')
+                        + '</span></span>'
+                        + '<span class="item-qty" style="color:var(--warning);font-weight:700;">합산 ' + totalQty + '개</span></div>';
+                }
+            }
+
             list.innerHTML = html;
             list.classList.add('active');
             btn.innerHTML = '<span>&#128230;</span> 다시 불러오기';
@@ -2500,27 +2530,39 @@
         }
     }
 
+    function formatReturnDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
     function buildReturnItemHtml(item) {
         const name = item.productName || '';
         const option = item.optionName || '';
-        const display = option ? name + ' / ' + option : name;
         const cpNo = item.channelProductNo || '';
         const orderId = item.productOrderId || '';
-        // 주문번호 뒤 8자리만 표시 (가독성)
+        const dateStr = formatReturnDate(item.lastChangedDate);
+        const buyer = item.ordererName || '';
         const shortOrderId = orderId.length > 8 ? '...' + orderId.slice(-8) : orderId;
-        const escaped = display.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        // 하단 정보줄: 날짜 · 주문자 · 주문번호
+        const infoLine = [dateStr, buyer, '주문 ' + shortOrderId].filter(Boolean).join(' · ');
+
         if (item.alreadyAdded) {
             return '<div class="naver-return-item" style="opacity:0.45;cursor:default;" title="주문번호: ' + orderId + '">'
-                + '<span class="item-name" style="display:flex;flex-direction:column;gap:1px;">'
-                + '<span>' + display + '</span>'
-                + '<span style="font-size:10px;color:var(--text-muted);">주문 ' + shortOrderId + ' · 등록 완료</span>'
+                + '<span class="item-name" style="display:flex;flex-direction:column;gap:2px;">'
+                + '<span>' + name + '</span>'
+                + (option ? '<span style="font-size:12px;color:var(--accent);font-weight:600;">' + option + '</span>' : '')
+                + '<span style="font-size:10px;color:var(--text-muted);">' + infoLine + ' · 등록 완료</span>'
                 + '</span>'
                 + '<span class="item-qty" style="color:#22c55e;font-size:11px;font-weight:600;">&#10003; 등록됨</span></div>';
         }
+        const escaped = (name + (option ? ' / ' + option : '')).replace(/'/g, "\\'").replace(/"/g, '&quot;');
         return '<div class="naver-return-item" onclick="selectNaverReturn(\'' + orderId + '\', \'' + escaped + '\', ' + item.qty + ', \'' + cpNo + '\')" title="주문번호: ' + orderId + '">'
-            + '<span class="item-name" style="display:flex;flex-direction:column;gap:1px;">'
-            + '<span>' + display + '</span>'
-            + '<span style="font-size:10px;color:var(--text-muted);">주문 ' + shortOrderId + (cpNo ? ' · 상품 ' + cpNo : '') + '</span>'
+            + '<span class="item-name" style="display:flex;flex-direction:column;gap:2px;">'
+            + '<span>' + name + '</span>'
+            + (option ? '<span style="font-size:12px;color:var(--accent);font-weight:600;">' + option + '</span>' : '')
+            + '<span style="font-size:10px;color:var(--text-muted);">' + infoLine + '</span>'
             + '</span>'
             + '<span class="item-qty">' + item.qty + '개</span></div>';
     }
@@ -2560,6 +2602,43 @@
         document.getElementById('inputChannelProductNo').value = channelProductNo;
 
         // 선택 하이라이트
+        document.querySelectorAll('.naver-return-item').forEach(el => el.classList.remove('selected'));
+        event.currentTarget.classList.add('selected');
+    }
+
+    function selectNaverReturnGroup(orderIdsStr) {
+        const orderIds = orderIdsStr.split(',');
+        const items = (window._naverReturnItems || []).filter(i => orderIds.includes(i.productOrderId));
+        if (items.length === 0) return;
+
+        const first = items[0];
+        const totalQty = items.reduce((s, i) => s + i.qty, 0);
+        const name = first.productName || '';
+        const brandMatch = name.match(/^([a-zA-Z]{2})\s/);
+        const brand = brandMatch ? brandMatch[1].toLowerCase() : '';
+        const productName = brandMatch ? name.slice(brandMatch[0].length) : name;
+        // 색상: 여러 옵션 합쳐서 표시
+        const colors = items.map(i => i.optionName || '기본');
+        const colorStr = colors.join(', ');
+
+        const brandSelect = document.getElementById('inputBrand');
+        if (brand) {
+            const exists = [...brandSelect.options].some(o => o.value === brand);
+            if (exists) {
+                brandSelect.value = brand;
+            } else {
+                brandSelect.value = '__custom__';
+                toggleCustomBrand();
+                document.getElementById('inputCustomBrand').value = brand;
+            }
+        }
+
+        document.getElementById('inputName').value = productName;
+        document.getElementById('inputColor').value = colorStr;
+        document.getElementById('inputQty').value = totalQty;
+        document.getElementById('inputProductOrderId').value = orderIds.join(',');
+        document.getElementById('inputChannelProductNo').value = first.channelProductNo || '';
+
         document.querySelectorAll('.naver-return-item').forEach(el => el.classList.remove('selected'));
         event.currentTarget.classList.add('selected');
     }
