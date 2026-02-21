@@ -328,6 +328,7 @@ app.post('/api/sales/fetch', async (req, res) => {
     let totalInserted = 0;
     let totalFound = 0;
     const errors = [];
+    const storeResults = [];
 
     // === 네이버 수집 ===
     for (const { key, client, configKey } of naverStores) {
@@ -395,6 +396,7 @@ app.post('/api/sales/fetch', async (req, res) => {
         if (!errors.some(e => e.startsWith(`Store ${key}`))) {
           await scheduler.setConfig(configKey, now.toISOString());
         }
+        storeResults.push({ store: `네이버(${key})`, found: storeFound, inserted: storeInserted });
         totalInserted += storeInserted;
         totalFound += storeFound;
         console.log(`[Sales] Store ${key} 수집 완료: 발견 ${storeFound}건, 신규 ${storeInserted}건`);
@@ -444,6 +446,7 @@ app.post('/api/sales/fetch', async (req, res) => {
         if (!errors.some(e => e.startsWith('Coupang'))) {
           await scheduler.setConfig(configKey, now.toISOString());
         }
+        storeResults.push({ store: '쿠팡', found: storeFound, inserted: storeInserted });
         totalInserted += storeInserted;
         totalFound += storeFound;
         console.log(`[Sales] Coupang 수집 완료: 발견 ${storeFound}건, 신규 ${storeInserted}건`);
@@ -454,11 +457,14 @@ app.post('/api/sales/fetch', async (req, res) => {
     }
 
     const hasErrors = errors.length > 0;
+    const details = storeResults || [];
+    const detailMsg = details.map(d => `${d.store}: ${d.inserted}건`).join(', ');
     res.json({
       success: !hasErrors || totalInserted > 0,
       inserted: totalInserted,
       errors,
-      message: hasErrors ? errors.join('; ') : `${totalInserted}건 수집 완료`,
+      details,
+      message: hasErrors ? errors.join('; ') : `${totalInserted}건 수집 (${detailMsg})`,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -2835,7 +2835,8 @@
                     : data.errors.join('; ');
                 showToast(msg, 'error');
             } else if (data.success) {
-                showToast(`${data.inserted}건 수집`, data.inserted > 0 ? 'success' : 'info');
+                const msg = data.message || `${data.inserted}건 수집`;
+                showToast(msg, data.inserted > 0 ? 'success' : 'info');
                 loadSalesStats();
                 loadTodayOrders();
             } else {
