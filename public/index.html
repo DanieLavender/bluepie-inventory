@@ -4067,20 +4067,26 @@
         });
     }
 
-    // Register Service Worker with update detection
+    // Register Service Worker with auto-update
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').then((reg) => {
+            // 주기적으로 SW 업데이트 확인 (60초마다)
+            setInterval(() => reg.update(), 60 * 1000);
+
             reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        if (confirm('새 버전이 있습니다. 업데이트하시겠습니까?')) {
-                            newWorker.postMessage('skipWaiting');
-                            window.location.reload();
-                        }
+                        // 새 SW 설치 완료 → 즉시 활성화 요청
+                        newWorker.postMessage('skipWaiting');
                     }
                 });
             });
+        });
+
+        // 새 SW가 컨트롤러로 전환되면 자동 리로드
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
         });
     }
 
