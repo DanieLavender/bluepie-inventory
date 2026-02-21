@@ -22,17 +22,19 @@ class CoupangClient {
     return `${y}${M}${d}T${H}${m}${s}Z`;
   }
 
-  generateSignature(method, path, datetime) {
-    const message = datetime + method + path;
+  generateSignature(method, fullPath, datetime) {
+    // 쿠팡 HMAC: message = datetime + method + path + querystring (? 제외)
+    const [path, qs] = fullPath.split('?');
+    const message = datetime + method + path + (qs || '');
     return crypto
       .createHmac('sha256', this.secretKey)
       .update(message)
       .digest('hex');
   }
 
-  buildAuthHeader(method, path) {
+  buildAuthHeader(method, fullPath) {
     const datetime = this.formatDatetime();
-    const signature = this.generateSignature(method, path, datetime);
+    const signature = this.generateSignature(method, fullPath, datetime);
     return `CEA algorithm=HmacSHA256, access-key=${this.accessKey}, signed-date=${datetime}, signature=${signature}`;
   }
 
