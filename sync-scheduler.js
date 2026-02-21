@@ -355,6 +355,16 @@ class SyncScheduler {
       const storeBDelivery = await this.getStoreBDeliveryInfo(sourceDelivery);
       if (storeBDelivery) {
         copyData.originProduct.deliveryInfo = JSON.parse(JSON.stringify(storeBDelivery));
+        // A 스토어의 반품/교환 배송비를 B 상품에 반영 (캐시된 B 배송정보가 0일 수 있음)
+        if (sourceDelivery?.claimDeliveryInfo) {
+          if (!copyData.originProduct.deliveryInfo.claimDeliveryInfo) {
+            copyData.originProduct.deliveryInfo.claimDeliveryInfo = {};
+          }
+          const src = sourceDelivery.claimDeliveryInfo;
+          const dst = copyData.originProduct.deliveryInfo.claimDeliveryInfo;
+          if (src.returnDeliveryFee != null) dst.returnDeliveryFee = src.returnDeliveryFee;
+          if (src.exchangeDeliveryFee != null) dst.exchangeDeliveryFee = src.exchangeDeliveryFee;
+        }
       }
 
       const created = await this.storeB.createProduct(copyData);
