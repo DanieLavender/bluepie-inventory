@@ -108,12 +108,12 @@ app.post('/api/inventory', async (req, res) => {
     if (!name || !color) {
       return res.status(400).json({ error: '상품명과 컬러는 필수입니다.' });
     }
-    // 중복 방지: productOrderId가 있으면 이미 등록된 건인지 체크
+    // 중복 방지: productOrderId가 있으면 이미 등록된 건인지 체크 (재고반영/B스토어 복사 포함)
     if (productOrderId) {
       const orderIdList = productOrderId.includes(',') ? productOrderId.split(',') : [productOrderId];
       const placeholders = orderIdList.map(() => '?').join(',');
       const dupRows = await query(
-        `SELECT product_order_id FROM sync_log WHERE type = 'inventory_update' AND product_order_id IN (${placeholders})`,
+        `SELECT product_order_id FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
         orderIdList.map(id => id.trim())
       );
       if (dupRows.length > 0) {
@@ -669,12 +669,12 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       console.error(`[Returnable] 쿠팡 조회 실패:`, coupangErr.message);
     }
 
-    // === processedIds 조회 (네이버 + 쿠팡 통합) ===
+    // === processedIds 조회 (네이버 + 쿠팡 통합) — 재고 반영 OR B스토어 복사 완료 건 ===
     let processedIds = new Set();
     if (allProductOrderIds.length > 0) {
       const placeholders = allProductOrderIds.map(() => '?').join(',');
       const logRows = await query(
-        `SELECT product_order_id FROM sync_log WHERE type = 'inventory_update' AND product_order_id IN (${placeholders})`,
+        `SELECT DISTINCT product_order_id FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
         allProductOrderIds
       );
       processedIds = new Set(logRows.map(r => r.product_order_id));
@@ -1186,13 +1186,13 @@ app.get('/api/returns/confirmed', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM return_confirmations ORDER BY confirmed_at DESC');
 
-    // sync_log에서 inventory_update 여부 확인
+    // sync_log에서 처리 완료 여부 확인 (재고반영/B스토어 복사 포함)
     let processedIds = new Set();
     if (rows.length > 0) {
       const allIds = rows.map(r => r.product_order_id);
       const placeholders = allIds.map(() => '?').join(',');
       const logRows = await query(
-        `SELECT product_order_id FROM sync_log WHERE type = 'inventory_update' AND product_order_id IN (${placeholders})`,
+        `SELECT DISTINCT product_order_id FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
         allIds
       );
       processedIds = new Set(logRows.map(r => r.product_order_id));
