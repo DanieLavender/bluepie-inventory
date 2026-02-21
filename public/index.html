@@ -1778,7 +1778,7 @@
                 <!-- 오늘 주문 목록 -->
                 <div class="shell-card">
                     <div class="shell-header">
-                        <h2>오늘 주문 목록</h2>
+                        <h2>오늘 주문 목록 <span id="salesRefreshTime" style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:8px;"></span></h2>
                         <button class="btn btn-accent btn-sm" id="salesFetchBtn" onclick="fetchSalesNow()">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             데이터 수집
@@ -3906,6 +3906,14 @@
 
     // ===== Sales Page (오늘 현황) =====
 
+    function updateSalesRefreshTime() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        document.getElementById('salesRefreshTime').textContent = `${h}:${m}:${s} 기준`;
+    }
+
     function loadSalesPage() {
         // 1) DB 데이터 즉시 표시
         loadSalesStats();
@@ -3953,11 +3961,13 @@
             const tbody = document.getElementById('salesRecentBody');
 
             if (!data || data.length === 0) {
+                updateSalesRefreshTime();
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);">오늘 주문이 아직 없습니다.</td></tr>';
                 return;
             }
 
             const cancelStatuses = ['CANCELED', 'CANCELED_BY_NOPAYMENT', 'RETURNED', 'EXCHANGED', 'CANCELLED'];
+            updateSalesRefreshTime();
             tbody.innerHTML = data.map(row => {
                 const date = new Date(row.order_date);
                 const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
