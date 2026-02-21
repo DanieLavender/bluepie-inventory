@@ -104,7 +104,7 @@ app.get('/api/brands', async (req, res) => {
 // POST /api/inventory - 재고 추가
 app.post('/api/inventory', async (req, res) => {
   try {
-    const { name, color, qty, brand: inputBrand, productOrderId, channelProductNo } = req.body;
+    const { name, color, qty, brand: inputBrand, productOrderId, channelProductNo, size } = req.body;
     if (!name || !color) {
       return res.status(400).json({ error: '상품명과 컬러는 필수입니다.' });
     }
@@ -112,10 +112,11 @@ app.post('/api/inventory', async (req, res) => {
     const qtyVal = Math.max(0, parseInt(qty) || 0);
     const trimmedName = name.trim();
     const trimmedColor = color.trim();
+    const trimmedSize = size ? size.trim() : null;
 
     const result = await query(
-      'INSERT INTO inventory (name, color, qty, brand, channel_product_no) VALUES (?, ?, ?, ?, ?)',
-      [trimmedName, trimmedColor, qtyVal, brand, channelProductNo || null]
+      'INSERT INTO inventory (name, color, qty, brand, channel_product_no, size) VALUES (?, ?, ?, ?, ?, ?)',
+      [trimmedName, trimmedColor, qtyVal, brand, channelProductNo || null, trimmedSize]
     );
     const rows = await query('SELECT * FROM inventory WHERE id = ?', [result.insertId]);
 

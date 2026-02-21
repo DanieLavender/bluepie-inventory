@@ -297,6 +297,161 @@
         .stat-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
         .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
+        /* ===== 9.5. Recent Returns Section ===== */
+        .recent-returns-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .recent-returns-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .recent-returns-header:hover { background: var(--bg-primary); }
+        .recent-returns-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .recent-returns-count {
+            background: var(--accent);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .recent-returns-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .return-period-select {
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            background: white;
+            color: var(--text-primary);
+        }
+        .recent-returns-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        .recent-returns-toggle.open { transform: rotate(180deg); }
+        .recent-returns-body {
+            border-top: 1px solid var(--border);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .recent-returns-empty {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .recent-returns-list { padding: 0; }
+        .return-status-group {
+            padding: 8px 16px 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+        }
+        .return-item-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            transition: background 0.15s;
+        }
+        .return-item-row:hover { background: #F8FAFC; }
+        .return-item-row:last-child { border-bottom: none; }
+        .return-item-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .return-item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+        .return-item-option {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        .return-item-qty {
+            color: var(--accent);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .return-item-date {
+            color: var(--text-muted);
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .return-add-btn {
+            flex-shrink: 0;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .return-add-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .return-add-btn.added {
+            background: #F0FDF4;
+            color: #16A34A;
+            border-color: #BBF7D0;
+            cursor: default;
+        }
+        @media (max-width: 768px) {
+            .recent-returns-header { padding: 10px 12px; }
+            .return-item-row {
+                flex-wrap: wrap;
+                padding: 10px 12px;
+                gap: 6px;
+            }
+            .return-item-info { flex-basis: calc(100% - 70px); }
+            .return-item-name { max-width: 160px; }
+        }
+
         /* ===== 10. Toolbar ===== */
         .toolbar {
             display: flex;
@@ -388,6 +543,7 @@
         .col-brand { width: 90px; }
         .col-name { }
         .col-color { width: 140px; }
+        .col-size { width: 80px; color: var(--text-secondary); font-size: 13px; }
         .col-qty { width: 120px; }
         .col-date { width: 130px; }
         .col-more { width: 50px; text-align: center; }
@@ -1370,6 +1526,35 @@
                     </div>
                 </div>
 
+                <!-- 최근 반품/수거 섹션 -->
+                <div class="recent-returns-section" id="recentReturnsSection">
+                    <div class="recent-returns-header" onclick="toggleRecentReturns()">
+                        <div class="recent-returns-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                            <span>최근 반품/수거</span>
+                            <span class="recent-returns-count" id="recentReturnsCount" style="display:none">0</span>
+                        </div>
+                        <div class="recent-returns-actions" onclick="event.stopPropagation()">
+                            <select id="returnFetchDays" class="return-period-select">
+                                <option value="72">3일</option>
+                                <option value="168">7일</option>
+                                <option value="360" selected>15일</option>
+                                <option value="720">30일</option>
+                            </select>
+                            <button class="btn btn-accent btn-sm" id="returnFetchBtn" onclick="fetchRecentReturns()">불러오기</button>
+                            <button class="recent-returns-toggle" id="returnToggleBtn" onclick="event.stopPropagation();toggleRecentReturns()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="recent-returns-body" id="recentReturnsBody" style="display:none">
+                        <div class="recent-returns-empty" id="recentReturnsEmpty">
+                            "불러오기"를 클릭하여 반품/수거 내역을 조회하세요.
+                        </div>
+                        <div class="recent-returns-list" id="recentReturnsList"></div>
+                    </div>
+                </div>
+
                 <!-- Toolbar -->
                 <div class="toolbar">
                     <div class="search-box">
@@ -1408,13 +1593,14 @@
                                 <th class="col-brand">브랜드</th>
                                 <th class="col-name">상품명</th>
                                 <th class="col-color">컬러</th>
+                                <th class="col-size">사이즈</th>
                                 <th class="col-qty">수량</th>
                                 <th class="col-date">수정일</th>
                                 <th class="col-more"></th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
-                            <tr><td colspan="8" class="loading">데이터를 불러오는 중...</td></tr>
+                            <tr><td colspan="9" class="loading">데이터를 불러오는 중...</td></tr>
                         </tbody>
                     </table>
 
@@ -1743,6 +1929,10 @@
             <div class="form-group">
                 <label>컬러 *</label>
                 <input type="text" id="inputColor" placeholder="예: 아이보리">
+            </div>
+            <div class="form-group">
+                <label>사이즈</label>
+                <input type="text" id="inputSize" placeholder="예: Free, S, M, L">
             </div>
             <div class="form-group">
                 <label>수량 *</label>
@@ -2118,6 +2308,7 @@
                     <td class="col-brand">${brandHtml}</td>
                     <td class="col-name">${escapeHtml(item.name)}</td>
                     <td class="col-color"><span class="color-chip">${colorDot}${escapeHtml(item.color)}</span></td>
+                    <td class="col-size">${item.size ? escapeHtml(item.size) : '<span style="color:var(--text-muted)">-</span>'}</td>
                     <td class="col-qty">
                         <div class="qty-group">
                             <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)">-</button>
@@ -2168,7 +2359,7 @@
                     </div>
                     <div class="card-name">${escapeHtml(item.name)}</div>
                     <div class="card-bottom">
-                        <span class="card-color-text">${colorDot}${escapeHtml(item.color)}</span>
+                        <span class="card-color-text">${colorDot}${escapeHtml(item.color)}${item.size ? ` · ${escapeHtml(item.size)}` : ''}</span>
                         <div class="card-actions">
                             <div class="qty-group">
                                 <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)" style="width:28px;height:28px;">-</button>
@@ -2433,6 +2624,7 @@
         document.getElementById('customBrandGroup').style.display = 'none';
         document.getElementById('inputName').value = '';
         document.getElementById('inputColor').value = '';
+        document.getElementById('inputSize').value = '';
         document.getElementById('inputQty').value = 1;
         document.getElementById('inputProductOrderId').value = '';
         document.getElementById('inputChannelProductNo').value = '';
@@ -2622,6 +2814,141 @@
         return result;
     }
 
+    // ===== 최근 반품/수거 섹션 (메인 페이지) =====
+    let _recentReturnsOpen = false;
+
+    function toggleRecentReturns() {
+        _recentReturnsOpen = !_recentReturnsOpen;
+        const body = document.getElementById('recentReturnsBody');
+        const toggleBtn = document.getElementById('returnToggleBtn');
+        body.style.display = _recentReturnsOpen ? 'block' : 'none';
+        toggleBtn.classList.toggle('open', _recentReturnsOpen);
+    }
+
+    async function fetchRecentReturns() {
+        const btn = document.getElementById('returnFetchBtn');
+        const list = document.getElementById('recentReturnsList');
+        const empty = document.getElementById('recentReturnsEmpty');
+        const countBadge = document.getElementById('recentReturnsCount');
+        btn.disabled = true;
+        btn.textContent = '조회 중...';
+
+        // 펼치기
+        if (!_recentReturnsOpen) toggleRecentReturns();
+
+        try {
+            const hours = document.getElementById('returnFetchDays').value;
+            const items = await api('/api/sync/returnable-items?hours=' + hours);
+
+            // 전역 저장 (모달에서도 사용)
+            window._naverReturnItems = items;
+
+            if (!items || items.length === 0) {
+                list.innerHTML = '';
+                empty.style.display = 'block';
+                empty.textContent = '해당 기간에 반품/수거 내역이 없습니다.';
+                countBadge.style.display = 'none';
+                return;
+            }
+
+            empty.style.display = 'none';
+            countBadge.textContent = items.length;
+            countBadge.style.display = '';
+
+            // 상태별 그룹핑
+            const groups = {};
+            const statusOrder = ['COLLECTING', 'COLLECT_DONE', 'RETURN_DONE', 'RETURN_REQUEST'];
+            const statusLabels = {
+                'COLLECTING': '수거중',
+                'COLLECT_DONE': '수거완료',
+                'RETURN_DONE': '반품완료',
+                'RETURN_REQUEST': '반품요청'
+            };
+
+            for (const item of items) {
+                const st = item.claimStatus || '기타';
+                if (!groups[st]) groups[st] = [];
+                groups[st].push(item);
+            }
+
+            let html = '';
+            const allStatuses = [...statusOrder, ...Object.keys(groups).filter(k => !statusOrder.includes(k))];
+
+            for (const st of allStatuses) {
+                if (!groups[st] || groups[st].length === 0) continue;
+                const label = statusLabels[st] || st;
+                html += `<div class="return-status-group">${label} (${groups[st].length}건)</div>`;
+
+                for (const item of groups[st]) {
+                    const { brand } = extractBrandFromName(item.productName || '');
+                    const brandClass = brand ? `brand-${brand}` : 'brand-default';
+                    const brandBadge = brand ? `<span class="brand-badge ${brandClass}" style="font-size:10px;padding:1px 5px;">${brand}</span>` : '';
+                    const { color, size } = parseProductOption(item.optionName);
+                    const colorText = color || '(옵션없음)';
+                    const sizeText = size ? ` · ${size}` : '';
+                    const dateStr = item.lastChangedDate ? new Date(item.lastChangedDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+
+                    html += `<div class="return-item-row" data-order-id="${item.productOrderId}">
+                        <div class="return-item-info">
+                            ${brandBadge}
+                            <span class="return-item-name">${escapeHtml(item.productName || '')}</span>
+                            <span class="return-item-option">${escapeHtml(colorText)}${escapeHtml(sizeText)}</span>
+                            <span class="return-item-qty">${item.qty || 1}개</span>
+                            <span class="return-item-date">${dateStr}</span>
+                        </div>
+                        <button class="return-add-btn" onclick="addFromRecentReturn('${item.productOrderId}', this)">+ 추가</button>
+                    </div>`;
+                }
+            }
+
+            list.innerHTML = html;
+        } catch (e) {
+            empty.style.display = 'block';
+            empty.textContent = '반품 내역 조회 실패: ' + e.message;
+            list.innerHTML = '';
+            countBadge.style.display = 'none';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '불러오기';
+        }
+    }
+
+    function addFromRecentReturn(productOrderId, btnEl) {
+        const items = window._naverReturnItems || [];
+        const item = items.find(i => i.productOrderId === productOrderId);
+        if (!item) return;
+
+        // 모달 열기 + 자동 입력
+        openAddModal();
+
+        // 약간의 딜레이로 모달 DOM 준비 후 입력
+        setTimeout(() => {
+            const fullName = item.productName || '';
+            const { color, size } = parseProductOption(item.optionName);
+            const { brand, name: productName } = extractBrandFromName(fullName);
+
+            const brandSelect = document.getElementById('inputBrand');
+            if (brand) {
+                const exists = [...brandSelect.options].some(o => o.value === brand);
+                if (exists) {
+                    brandSelect.value = brand;
+                    document.getElementById('customBrandGroup').style.display = 'none';
+                } else {
+                    brandSelect.value = '__custom__';
+                    toggleCustomBrand();
+                    document.getElementById('inputCustomBrand').value = brand;
+                }
+            }
+
+            document.getElementById('inputName').value = productName;
+            document.getElementById('inputColor').value = color;
+            document.getElementById('inputSize').value = size || '';
+            document.getElementById('inputQty').value = item.qty || 1;
+            document.getElementById('inputProductOrderId').value = productOrderId;
+            document.getElementById('inputChannelProductNo').value = item.channelProductNo || '';
+        }, 50);
+    }
+
     // 원본 데이터에서 직접 추출 (문자열 파싱 대신)
     function selectNaverReturnById(productOrderId) {
         const items = window._naverReturnItems || [];
@@ -2652,6 +2979,7 @@
 
         document.getElementById('inputName').value = productName;
         document.getElementById('inputColor').value = color;
+        document.getElementById('inputSize').value = size || '';
         document.getElementById('inputQty').value = item.qty || 1;
         document.getElementById('inputProductOrderId').value = productOrderId;
         document.getElementById('inputChannelProductNo').value = item.channelProductNo || '';
@@ -2689,8 +3017,12 @@
             document.getElementById('customBrandGroup').style.display = 'none';
         }
 
+        // 사이즈: 첫 항목의 사이즈 사용
+        const { size: groupSize } = parseProductOption(first.optionName);
+
         document.getElementById('inputName').value = productName;
         document.getElementById('inputColor').value = colorStr;
+        document.getElementById('inputSize').value = groupSize || '';
         document.getElementById('inputQty').value = totalQty;
         document.getElementById('inputProductOrderId').value = orderIds.join(',');
         document.getElementById('inputChannelProductNo').value = first.channelProductNo || '';
@@ -2704,6 +3036,7 @@
         const customBrand = document.getElementById('inputCustomBrand').value.trim().toLowerCase();
         const rawName = document.getElementById('inputName').value.trim();
         const color = document.getElementById('inputColor').value.trim();
+        const size = document.getElementById('inputSize').value.trim() || undefined;
         const qty = parseInt(document.getElementById('inputQty').value) || 0;
 
         let brand = '';
@@ -2727,10 +3060,21 @@
         try {
             await api('/api/inventory', {
                 method: 'POST',
-                body: JSON.stringify({ name, color, qty, brand, productOrderId, channelProductNo })
+                body: JSON.stringify({ name, color, qty, brand, productOrderId, channelProductNo, size })
             });
             closeAddModal();
             showToast(`"${name}" 이(가) 추가되었습니다.`, 'success');
+            // 최근 반품 리스트에서 해당 항목 "추가됨" 표시
+            if (productOrderId) {
+                const orderIds = productOrderId.includes(',') ? productOrderId.split(',') : [productOrderId];
+                for (const oid of orderIds) {
+                    const row = document.querySelector(`.return-item-row[data-order-id="${oid.trim()}"]`);
+                    if (row) {
+                        const btn = row.querySelector('.return-add-btn');
+                        if (btn) { btn.classList.add('added'); btn.textContent = '추가됨'; btn.onclick = null; }
+                    }
+                }
+            }
             loadStats();
             loadBrands();
             currentPage = 999;

@@ -44,6 +44,13 @@ async function initDb() {
     // 이미 존재하면 무시 (ER_DUP_FIELDNAME)
   }
 
+  // inventory에 size 컬럼 추가
+  try {
+    await query(`ALTER TABLE inventory ADD COLUMN size VARCHAR(255) DEFAULT NULL`);
+  } catch (e) {
+    // 이미 존재하면 무시
+  }
+
   await query(`
     CREATE TABLE IF NOT EXISTS sync_log (
       id INT AUTO_INCREMENT PRIMARY KEY,

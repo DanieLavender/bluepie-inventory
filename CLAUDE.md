@@ -49,6 +49,7 @@ CREATE TABLE inventory (
   qty INT NOT NULL DEFAULT 0,                -- 수량
   brand VARCHAR(10) DEFAULT '',              -- 브랜드 코드 (예: "hm", "it", "ls")
   channel_product_no VARCHAR(255) DEFAULT NULL, -- 네이버 스토어 상품번호 (점진적 연결)
+  size VARCHAR(255) DEFAULT NULL,              -- 사이즈 (예: "Free", "S", "M", "L")
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT NULL           -- 수량 변경 시 자동 갱신
 );
