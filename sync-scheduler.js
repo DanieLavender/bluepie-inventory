@@ -449,6 +449,8 @@ class SyncScheduler {
 
   async fetchSalesData() {
     if (!this.hasClients()) return;
+    let totalNewOrders = 0;
+    let totalNewAmount = 0;
 
     const stores = [
       { key: 'A', client: this.storeA, configKey: 'sales_last_fetch_a' },
@@ -518,6 +520,7 @@ class SyncScheduler {
 
         await this.setConfig(configKey, now.toISOString());
         if (inserted > 0) {
+          totalNewOrders += inserted;
           console.log(`[Sales] Store ${key} 자동 수집: ${inserted}건`);
         }
       } catch (e) {
@@ -569,11 +572,17 @@ class SyncScheduler {
 
         await this.setConfig(configKey, now.toISOString());
         if (inserted > 0) {
+          totalNewOrders += inserted;
           console.log(`[Sales] Coupang 자동 수집: ${inserted}건`);
         }
       }
     } catch (e) {
       console.error('[Sales] Coupang 수집 오류:', e.message);
+    }
+
+    // 신규 매출 푸시 알림
+    if (totalNewOrders > 0) {
+      await this.sendPushNotification('신규 주문', `새 주문 ${totalNewOrders}건이 들어왔습니다`);
     }
   }
 
