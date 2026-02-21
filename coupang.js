@@ -122,28 +122,43 @@ class CoupangClient {
         }
         if (!data || !data.data) break;
 
-      for (const order of data.data) {
-        const orderedAt = order.orderedAt || order.paidAt || toDate;
-        const status = order.status || '';
-        const shipmentBoxId = String(order.shipmentBoxId || '');
-
-        if (order.orderItems && Array.isArray(order.orderItems)) {
-          for (const item of order.orderItems) {
-            const vendorItemId = String(item.vendorItemId || '');
-            allItems.push({
-              productOrderId: `CPG_${shipmentBoxId}_${vendorItemId}`,
-              orderDate: new Date(orderedAt),
-              productName: item.vendorItemName || '',
-              optionName: item.sellerProductItemName || null,
-              qty: item.shippingCount || 1,
-              unitPrice: item.salesPrice?.units || 0,
-              totalAmount: (item.salesPrice?.units || 0) * (item.shippingCount || 1),
-              status,
-              channelProductNo: vendorItemId,
-            });
+        // 첫 주문 구조 디버그 로그 (1회만)
+        if (!this._loggedSample && data.data.length > 0) {
+          this._loggedSample = true;
+          const sample = data.data[0];
+          console.log('[Coupang] 주문 샘플:', JSON.stringify(sample).slice(0, 1000));
+          if (sample.orderItems?.[0]) {
+            console.log('[Coupang] 아이템 샘플:', JSON.stringify(sample.orderItems[0]).slice(0, 500));
           }
         }
-      }
+
+        for (const order of data.data) {
+          const orderedAt = order.orderedAt || order.paidAt || toDate;
+          const orderStatus = order.status || '';
+          const shipmentBoxId = String(order.shipmentBoxId || '');
+
+          if (order.orderItems && Array.isArray(order.orderItems)) {
+            for (const item of order.orderItems) {
+              const vendorItemId = String(item.vendorItemId || '');
+              // 가격: 여러 필드 후보 탐색
+              const unitPrice = item.orderPrice || item.vendorItemPrice || item.salesPrice
+                || (typeof item.salesPrice === 'object' ? (item.salesPrice?.units || 0) : 0)
+                || item.unitPrice || item.price || 0;
+              const qty = item.shippingCount || 1;
+              allItems.push({
+                productOrderId: `CPG_${shipmentBoxId}_${vendorItemId}`,
+                orderDate: new Date(orderedAt),
+                productName: item.vendorItemName || '',
+                optionName: item.sellerProductItemName || null,
+                qty,
+                unitPrice: Number(unitPrice) || 0,
+                totalAmount: (Number(unitPrice) || 0) * qty,
+                status: orderStatus,
+                channelProductNo: vendorItemId,
+              });
+            }
+          }
+        }
 
         nextToken = data.nextToken || null;
         if (nextToken) await this.sleep(150);
