@@ -443,6 +443,12 @@
             border-color: #BBF7D0;
             cursor: default;
         }
+        .return-cancel-btn {
+            flex-shrink:0; padding:4px 8px; font-size:12px; font-weight:600;
+            color:var(--text-muted); background:transparent; border:1px solid var(--border);
+            border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s; white-space:nowrap;
+        }
+        .return-cancel-btn:hover { color:var(--danger); border-color:var(--danger); background:#FEF2F2; }
         .return-item-added {
             opacity: 0.5;
         }
@@ -3400,17 +3406,21 @@
         }
     }
 
-    async function cancelConfirmPickup(productOrderId, labelEl) {
-        if (!confirm('실수거완료를 취소하시겠습니까?')) return;
+    async function cancelConfirmPickup(productOrderId, el) {
+        if (el) { el.disabled = true; el.style.opacity = '0.5'; }
         try {
             await api('/api/returns/confirm-pickup/' + encodeURIComponent(productOrderId), { method: 'DELETE' });
-            // 라벨을 실수거완료 버튼으로 교체
-            if (labelEl) {
-                const btn = document.createElement('button');
-                btn.className = 'return-confirm-btn';
-                btn.textContent = '실수거완료';
-                btn.onclick = function() { confirmPickup(productOrderId, btn); };
-                labelEl.replaceWith(btn);
+            // 최근 반품 섹션: 라벨을 실수거완료 버튼으로 교체
+            const rows = document.querySelectorAll(`.return-item-row[data-order-id="${productOrderId}"]`);
+            for (const row of rows) {
+                const label = row.querySelector('.return-confirmed-label');
+                if (label) {
+                    const btn = document.createElement('button');
+                    btn.className = 'return-confirm-btn';
+                    btn.textContent = '실수거완료';
+                    btn.onclick = function() { confirmPickup(productOrderId, btn); };
+                    label.replaceWith(btn);
+                }
             }
             showToast('실수거완료가 취소되었습니다.', 'success');
             fetchConfirmedReturns();
@@ -3469,7 +3479,7 @@
                 const rowClass = added ? 'return-item-row return-item-added' : 'return-item-row';
                 const btnHtml = added
                     ? '<span class="return-added-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>추가완료</span>'
-                    : `<button class="return-add-btn" onclick="addFromConfirmedReturn('${item.product_order_id}', this)">+ 추가</button>`;
+                    : `<button class="return-cancel-btn" onclick="cancelConfirmPickup('${item.product_order_id}', this)" title="실수거완료 취소">✕</button><button class="return-add-btn" onclick="addFromConfirmedReturn('${item.product_order_id}', this)">+ 추가</button>`;
 
                 html += `<div class="${rowClass}" data-order-id="${item.product_order_id}">
                     <div class="return-item-info">
