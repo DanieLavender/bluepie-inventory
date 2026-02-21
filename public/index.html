@@ -398,10 +398,6 @@
         .return-item-name {
             font-weight: 500;
             color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 200px;
         }
         .return-item-option {
             color: var(--text-secondary);
@@ -410,6 +406,11 @@
         .return-item-qty {
             color: var(--accent);
             font-weight: 600;
+            white-space: nowrap;
+        }
+        .return-item-buyer {
+            color: var(--text-muted);
+            font-size: 11px;
             white-space: nowrap;
         }
         .return-item-date {
@@ -449,7 +450,6 @@
                 gap: 6px;
             }
             .return-item-info { flex-basis: calc(100% - 70px); }
-            .return-item-name { max-width: 160px; }
         }
 
         /* ===== 10. Toolbar ===== */
@@ -3187,12 +3187,15 @@
                     const sizeText = size ? ` · ${size}` : '';
                     const dateStr = item.lastChangedDate ? new Date(item.lastChangedDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
 
+                    const buyerName = item.ordererName ? `<span class="return-item-buyer">${escapeHtml(item.ordererName)}</span>` : '';
+
                     html += `<div class="return-item-row" data-order-id="${item.productOrderId}">
                         <div class="return-item-info">
                             ${brandBadge}
                             <span class="return-item-name">${escapeHtml(item.productName || '')}</span>
                             <span class="return-item-option">${escapeHtml(colorText)}${escapeHtml(sizeText)}</span>
                             <span class="return-item-qty">${item.qty || 1}개</span>
+                            ${buyerName}
                             <span class="return-item-date">${dateStr}</span>
                         </div>
                         <button class="return-add-btn" onclick="addFromRecentReturn('${item.productOrderId}', this)">+ 추가</button>
@@ -4015,6 +4018,8 @@
         router();
         await Promise.all([loadStats(), loadBrands(), loadData()]);
         updateRefreshTime();
+        // 최근 반품/수거 자동 로드 (3일)
+        fetchRecentReturns();
     }
     init();
     </script>
