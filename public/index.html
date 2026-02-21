@@ -2528,6 +2528,9 @@
         if (bId) body.store_b_client_id = bId;
         if (bSecret) body.store_b_client_secret = bSecret;
 
+        // 동기화 주기
+        body.sync_interval_minutes = document.getElementById('syncInterval').value;
+
         // B 스토어 상품 상태 설정 (항상 저장)
         body.store_b_display_status = document.getElementById('storeBDisplayStatus').value;
         body.store_b_sale_status = document.getElementById('storeBSaleStatus').value;

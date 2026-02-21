@@ -842,6 +842,7 @@ app.post('/api/sync/save-keys', async (req, res) => {
   try {
     const { store_a_client_id, store_a_client_secret, store_b_client_id, store_b_client_secret,
             store_b_display_status, store_b_sale_status, store_b_name_prefix,
+            sync_interval_minutes,
             coupang_access_key, coupang_secret_key, coupang_vendor_id } = req.body;
     const upsertSql = 'INSERT INTO sync_config (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()';
     if (store_a_client_id) await query(upsertSql, ['store_a_client_id', store_a_client_id]);
@@ -851,6 +852,8 @@ app.post('/api/sync/save-keys', async (req, res) => {
     if (store_b_display_status) await query(upsertSql, ['store_b_display_status', store_b_display_status]);
     if (store_b_sale_status) await query(upsertSql, ['store_b_sale_status', store_b_sale_status]);
     if (store_b_name_prefix !== undefined) await query(upsertSql, ['store_b_name_prefix', store_b_name_prefix]);
+    // 동기화 주기
+    if (sync_interval_minutes) await query(upsertSql, ['sync_interval_minutes', sync_interval_minutes]);
     // 쿠팡
     if (coupang_access_key) await query(upsertSql, ['coupang_access_key', coupang_access_key]);
     if (coupang_secret_key) await query(upsertSql, ['coupang_secret_key', coupang_secret_key]);
@@ -1024,6 +1027,22 @@ async function initCoupangClient() {
     }
   } catch (e) {
     console.log('[Sync] 설정 확인 오류:', e.message);
+  }
+
+  // 앱 업데이트 감지 → 푸시 알림
+  try {
+    const currentVersion = process.env.RENDER_GIT_COMMIT || null;
+    if (currentVersion) {
+      const storedVersion = await scheduler.getConfig('app_version');
+      if (storedVersion && storedVersion !== currentVersion) {
+        const shortHash = currentVersion.slice(0, 7);
+        await scheduler.sendPushNotification('앱 업데이트', `블루파이가 새 버전으로 업데이트되었습니다. (${shortHash})`);
+        console.log(`[Update] 새 버전 감지: ${storedVersion.slice(0,7)} → ${shortHash}`);
+      }
+      await scheduler.setConfig('app_version', currentVersion);
+    }
+  } catch (e) {
+    console.log('[Update] 버전 확인 오류:', e.message);
   }
 
   app.listen(PORT, () => {
