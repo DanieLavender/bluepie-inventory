@@ -496,7 +496,7 @@ app.post('/api/sales/fetch', async (req, res) => {
 app.get('/api/sync/returnable-items', async (req, res) => {
   try {
     await initSyncClients();
-    const hours = parseInt(req.query.hours) || 168; // 기본 7일 (수거완료 건은 오래 머무를 수 있음)
+    const hours = parseInt(req.query.hours) || 360; // 기본 15일 (수거완료 건은 오래 머무를 수 있음)
     const now = new Date();
     const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
 

@@ -560,41 +560,46 @@ class NaverCommerceClient {
    * @returns {Array} { productOrderId, claimStatus } objects
    */
   async getReturnableOrders(fromDate, toDate) {
+    // COLLECT_DONE: 수거완료 건 (클레임 전용 타입으로만 조회 가능)
+    // CLAIM_COMPLETED: 반품완료 건
+    // 일반 조회(타입 생략)로는 수거완료가 반환되지 않음 — 반드시 타입 지정 필요
+    const typesToCheck = ['COLLECT_DONE', 'CLAIM_COMPLETED'];
     const allStatuses = [];
     const fromMs = new Date(fromDate).getTime();
     const toMs = new Date(toDate).getTime();
     const DAY = 24 * 60 * 60 * 1000;
 
-    // 24시간씩 청크, lastChangedType 생략 → 전체 상태변경 조회 후 필터
+    // 24시간씩 청크 × 타입별 조회
     let cursor = fromMs;
     while (cursor < toMs) {
       const chunkEnd = Math.min(cursor + DAY, toMs);
       const chunkFrom = new Date(cursor).toISOString();
       const chunkTo = new Date(chunkEnd).toISOString();
 
-      try {
-        const params = new URLSearchParams({
-          lastChangedFrom: chunkFrom,
-          lastChangedTo: chunkTo,
-        });
+      for (const changeType of typesToCheck) {
+        try {
+          const params = new URLSearchParams({
+            lastChangedFrom: chunkFrom,
+            lastChangedTo: chunkTo,
+            lastChangedType: changeType,
+          });
 
-        const data = await this.apiCall(
-          'GET',
-          `/v1/pay-order/seller/product-orders/last-changed-statuses?${params}`
-        );
+          const data = await this.apiCall(
+            'GET',
+            `/v1/pay-order/seller/product-orders/last-changed-statuses?${params}`
+          );
 
-        const found = data?.data?.lastChangeStatuses || [];
-        if (found.length > 0) {
+          const found = data?.data?.lastChangeStatuses || [];
           for (const s of found) allStatuses.push(s);
+        } catch (e) {
+          console.log(`[${this.storeName}] ${changeType} ${chunkFrom.slice(0,10)} 오류 (무시):`, e.message);
         }
-      } catch (e) {
-        console.log(`[${this.storeName}] 전체조회 ${chunkFrom.slice(0,10)} 오류:`, e.message);
+        await this.sleep(200);
       }
       cursor = chunkEnd;
-      await this.sleep(300);
     }
 
-    // 반품 관련 필터: claimType=RETURN & (수거완료 or 반품완료)
+    // 반품 관련 필터
     const returnStatuses = allStatuses.filter(s => {
       const claimType = (s.claimType || '').toUpperCase();
       const claimStatus = (s.claimStatus || '').toUpperCase();
@@ -606,21 +611,13 @@ class NaverCommerceClient {
       );
     });
 
-    // 클레임 관련 건 분포 로깅
-    const claimItems = allStatuses.filter(s => s.claimType);
-    if (claimItems.length > 0) {
-      const dist = {};
-      claimItems.forEach(s => {
-        const key = `${s.claimType}/${s.claimStatus}`;
-        dist[key] = (dist[key] || 0) + 1;
-      });
-      console.log(`[${this.storeName}] 클레임 분포:`, JSON.stringify(dist));
-    }
-
-    console.log(`[${this.storeName}] 반품/수거: 전체 ${allStatuses.length}건, 클레임 ${claimItems.length}건, 필터 ${returnStatuses.length}건`);
-    returnStatuses.forEach(s => {
-      console.log(`  - claimType=${s.claimType} claimStatus=${s.claimStatus} orderStatus=${s.productOrderStatus} id=${s.productOrderId}`);
+    // 분포 로깅
+    const dist = {};
+    allStatuses.forEach(s => {
+      const key = `${s.claimType || '?'}/${s.claimStatus || s.productOrderStatus || '?'}`;
+      dist[key] = (dist[key] || 0) + 1;
     });
+    console.log(`[${this.storeName}] 반품/수거 조회: 전체 ${allStatuses.length}건, 필터 ${returnStatuses.length}건`, JSON.stringify(dist));
 
     // productOrderId 중복 제거
     const seen = new Set();

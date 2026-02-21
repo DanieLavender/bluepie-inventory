@@ -1714,7 +1714,10 @@
             </button>
             <div class="naver-return-list" id="naverReturnList"></div>
             <input type="hidden" id="inputProductOrderId">
-            <input type="hidden" id="inputChannelProductNo">
+            <div class="form-group">
+                <label>상품 ID</label>
+                <input type="text" id="inputChannelProductNo" placeholder="네이버 상품번호 (자동입력 또는 직접입력)">
+            </div>
             <div class="form-group">
                 <label>브랜드 *</label>
                 <select id="inputBrand" onchange="toggleCustomBrand()">
@@ -2453,9 +2456,9 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spin" style="display:inline-block;animation:spin 1s linear infinite">&#9881;</span> 불러오는 중...';
         try {
-            const items = await api('/api/sync/returnable-items?hours=168');
+            const items = await api('/api/sync/returnable-items');
             if (!items || items.length === 0) {
-                list.innerHTML = '<div class="naver-return-empty">최근 7일 내 반품/수거 완료 건이 없습니다.</div>';
+                list.innerHTML = '<div class="naver-return-empty">최근 15일 내 반품/수거 완료 건이 없습니다.</div>';
                 list.classList.add('active');
                 btn.innerHTML = '<span>&#128230;</span> 다시 불러오기';
                 btn.disabled = false;
