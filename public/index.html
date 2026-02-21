@@ -628,6 +628,7 @@
             backdrop-filter: blur(2px);
         }
         .modal-overlay.active { display: flex; }
+        body.modal-open { overflow: hidden; }
         .modal {
             background: var(--bg-card);
             border-radius: var(--radius-lg);
@@ -1942,9 +1943,11 @@
         editTargetId = id;
         document.getElementById('editName').value = name;
         document.getElementById('editModal').classList.add('active');
+        document.body.classList.add('modal-open');
     }
     function closeEditModal() {
         document.getElementById('editModal').classList.remove('active');
+        document.body.classList.remove('modal-open');
         editTargetId = null;
     }
     async function submitEdit() {
@@ -2409,6 +2412,7 @@
         document.getElementById('naverFetchBtn').disabled = false;
         document.getElementById('naverFetchBtn').innerHTML = '<span>&#128230;</span> 네이버 반품/수거 불러오기';
         document.getElementById('addModal').classList.add('active');
+        document.body.classList.add('modal-open');
     }
 
     function toggleCustomBrand() {
@@ -2422,6 +2426,7 @@
 
     function closeAddModal() {
         document.getElementById('addModal').classList.remove('active');
+        document.body.classList.remove('modal-open');
     }
 
     async function fetchNaverReturns() {
@@ -2572,6 +2577,7 @@
         pendingDeleteIds = [id];
         document.getElementById('confirmMsg').textContent = `"${name} (${color})" 을(를) 삭제하시겠습니까?`;
         document.getElementById('confirmModal').classList.add('active');
+        document.body.classList.add('modal-open');
     }
 
     function deleteSelected() {
@@ -2579,10 +2585,12 @@
         pendingDeleteIds = [...selectedIds];
         document.getElementById('confirmMsg').textContent = `선택한 ${pendingDeleteIds.length}개 항목을 삭제하시겠습니까?`;
         document.getElementById('confirmModal').classList.add('active');
+        document.body.classList.add('modal-open');
     }
 
     function closeConfirm() {
         document.getElementById('confirmModal').classList.remove('active');
+        document.body.classList.remove('modal-open');
         pendingDeleteIds = [];
     }
 

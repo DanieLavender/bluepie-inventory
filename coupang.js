@@ -78,12 +78,13 @@ class CoupangClient {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // 쿠팡 날짜 형식: yyyy-MM-dd (ISO → yyyy-MM-dd 변환)
+  // 쿠팡 날짜 형식: yyyy-MM-dd (쿠팡 API는 KST 기준이므로 UTC→KST 변환)
   formatCoupangDate(isoDate) {
     const d = new Date(isoDate);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+    const y = kst.getUTCFullYear();
+    const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(kst.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
 
@@ -123,7 +124,11 @@ class CoupangClient {
         if (!data || !data.data) break;
 
         for (const order of data.data) {
-          const orderedAt = order.orderedAt || order.paidAt || toDate;
+          const rawOrderedAt = order.orderedAt || order.paidAt || toDate;
+          // 쿠팡 API는 KST 기준 시간 반환 — timezone 표기 없으면 +09:00 추가
+          const orderedAt = (typeof rawOrderedAt === 'string' && !rawOrderedAt.includes('Z') && !rawOrderedAt.includes('+'))
+            ? rawOrderedAt + '+09:00'
+            : rawOrderedAt;
           const orderStatus = order.status || '';
           const shipmentBoxId = String(order.shipmentBoxId || '');
 
