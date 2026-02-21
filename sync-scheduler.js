@@ -128,6 +128,14 @@ class SyncScheduler {
         await this.logSync(runId, 'return_detect', 'A', null, null, null,
           `조회 기간: ${fromStr.slice(0,16)} ~ ${toStr.slice(0,16)}`, null, 0, 'success', '반품 관련 건 없음');
         await this.setConfig('last_sync_time', toStr);
+
+        // 반품 없어도 매출 수집은 항상 실행
+        try {
+          await this.fetchSalesData();
+        } catch (salesErr) {
+          console.error('[Sync] 매출 수집 오류:', salesErr.message);
+        }
+
         this.lastRunResult = result;
         return result;
       }
