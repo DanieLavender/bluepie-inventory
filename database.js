@@ -121,6 +121,7 @@ async function initDb() {
     ['store_b_sale_status', 'SALE'],
     ['sales_last_fetch_a', ''],
     ['sales_last_fetch_b', ''],
+    ['store_b_name_prefix', '(오늘출발)'],
   ];
   for (const [k, v] of configDefaults) {
     await query(

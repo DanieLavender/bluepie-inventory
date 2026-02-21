@@ -331,7 +331,8 @@ class SyncScheduler {
         return;
       }
 
-      const copyData = NaverCommerceClient.buildProductCopyData(sourceProduct, qty);
+      const namePrefix = await this.getConfig('store_b_name_prefix') ?? '(오늘출발)';
+      const copyData = NaverCommerceClient.buildProductCopyData(sourceProduct, qty, namePrefix);
 
       // B 스토어 상품 상태 설정 적용
       const bDisplayStatus = await this.getConfig('store_b_display_status') || 'ON';
