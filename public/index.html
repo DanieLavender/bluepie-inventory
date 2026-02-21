@@ -2756,9 +2756,22 @@
 
     // ===== Sales Page (오늘 현황) =====
 
-    function loadSalesPage() {
+    async function loadSalesPage() {
+        // 페이지 진입 시 백그라운드로 최신 데이터 수집 후 화면 갱신
         loadSalesStats();
         loadTodayOrders();
+        try {
+            const res = await fetch('/api/sales/fetch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const data = await res.json();
+            if (data.success && data.inserted > 0) {
+                loadSalesStats();
+                loadTodayOrders();
+            }
+        } catch (e) { /* 실패해도 무시 - 기존 데이터로 표시 */ }
     }
 
     async function loadSalesStats() {
