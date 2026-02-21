@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const webpush = require('web-push');
 const { NaverCommerceClient } = require('./smartstore');
 const { CoupangClient } = require('./coupang');
 const { query } = require('./database');
@@ -403,12 +404,8 @@ class SyncScheduler {
 
       console.log(`[Sync] B 스토어 신규 등록: ${productName} (수량: ${qty})`);
 
-      // 텔레그램 알림
-      const now = new Date();
-      const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      await this.sendTelegramNotification(
-        `🔔 B스토어 신규 상품 등록\n\n상품: ${productName}\n옵션: ${optionName || '없음'}\n수량: ${qty}개\n시간: ${timeStr}`
-      );
+      // 푸시 알림
+      await this.sendPushNotification('B스토어 신규 상품 등록', `${productName} (${optionName || '옵션없음'}) ${qty}개`);
     } catch (e) {
       await this.logSync(runId, 'product_create', 'A', 'B', productOrderId, channelProductNo,
         productName, optionName, qty, 'fail', e.message);
@@ -417,28 +414,34 @@ class SyncScheduler {
     }
   }
 
-  // === Telegram notification ===
+  // === Push notification ===
 
-  async sendTelegramNotification(text) {
+  async sendPushNotification(title, body) {
     try {
-      const enabled = await this.getConfig('telegram_enabled');
-      if (enabled !== 'true') return;
+      const pub = await this.getConfig('vapid_public_key');
+      const priv = await this.getConfig('vapid_private_key');
+      if (!pub || !priv) return;
 
-      const token = await this.getConfig('telegram_bot_token');
-      const chatId = await this.getConfig('telegram_chat_id');
-      if (!token || !chatId) return;
+      webpush.setVapidDetails('mailto:bluefi@example.com', pub, priv);
+      const subs = await query('SELECT * FROM push_subscriptions');
+      if (subs.length === 0) return;
 
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      });
-      if (!res.ok) {
-        const err = await res.text();
-        console.log(`[Telegram] 발송 실패: ${err.slice(0, 200)}`);
+      const payload = JSON.stringify({ title, body });
+      for (const sub of subs) {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload
+          );
+        } catch (e) {
+          if (e.statusCode === 404 || e.statusCode === 410) {
+            await query('DELETE FROM push_subscriptions WHERE id = ?', [sub.id]);
+          }
+        }
       }
+      console.log(`[Push] ${subs.length}개 기기에 알림 발송`);
     } catch (e) {
-      console.log(`[Telegram] 오류: ${e.message}`);
+      console.log(`[Push] 오류: ${e.message}`);
     }
   }
 

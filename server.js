@@ -5,6 +5,7 @@ const { getPool, initDb, query } = require('./database');
 const { scheduler } = require('./sync-scheduler');
 const { NaverCommerceClient } = require('./smartstore');
 const { CoupangClient } = require('./coupang');
+const webpush = require('web-push');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -736,9 +737,6 @@ app.get('/api/sync/config', async (req, res) => {
     config.coupang_access_key = cAccessKey ? maskSecret(cAccessKey) : '';
     config.coupang_secret_key = cSecretKey ? '****' : '';
     config.coupang_vendor_id = cVendorId || '';
-    // 텔레그램
-    const tgToken = config.telegram_bot_token || '';
-    config.telegram_bot_token = tgToken ? maskSecret(tgToken) : '';
     res.json(config);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -844,8 +842,7 @@ app.post('/api/sync/save-keys', async (req, res) => {
   try {
     const { store_a_client_id, store_a_client_secret, store_b_client_id, store_b_client_secret,
             store_b_display_status, store_b_sale_status, store_b_name_prefix,
-            coupang_access_key, coupang_secret_key, coupang_vendor_id,
-            telegram_bot_token, telegram_chat_id, telegram_enabled } = req.body;
+            coupang_access_key, coupang_secret_key, coupang_vendor_id } = req.body;
     const upsertSql = 'INSERT INTO sync_config (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()';
     if (store_a_client_id) await query(upsertSql, ['store_a_client_id', store_a_client_id]);
     if (store_a_client_secret) await query(upsertSql, ['store_a_client_secret', store_a_client_secret]);
@@ -858,10 +855,6 @@ app.post('/api/sync/save-keys', async (req, res) => {
     if (coupang_access_key) await query(upsertSql, ['coupang_access_key', coupang_access_key]);
     if (coupang_secret_key) await query(upsertSql, ['coupang_secret_key', coupang_secret_key]);
     if (coupang_vendor_id) await query(upsertSql, ['coupang_vendor_id', coupang_vendor_id]);
-    // 텔레그램
-    if (telegram_bot_token !== undefined) await query(upsertSql, ['telegram_bot_token', telegram_bot_token]);
-    if (telegram_chat_id !== undefined) await query(upsertSql, ['telegram_chat_id', telegram_chat_id]);
-    if (telegram_enabled !== undefined) await query(upsertSql, ['telegram_enabled', telegram_enabled]);
     scheduler.storeA = null;
     scheduler.storeB = null;
     res.json({ success: true });
@@ -885,24 +878,85 @@ app.post('/api/coupang/test-connection', async (req, res) => {
   }
 });
 
-// POST /api/telegram/test - 텔레그램 테스트 메시지 발송
-app.post('/api/telegram/test', async (req, res) => {
+// --- Push Notification API ---
+
+// VAPID 키 초기화 헬퍼
+async function getVapidKeys() {
+  const pub = await scheduler.getConfig('vapid_public_key');
+  const priv = await scheduler.getConfig('vapid_private_key');
+  if (pub && priv) return { publicKey: pub, privateKey: priv };
+  // 자동 생성
+  const keys = webpush.generateVAPIDKeys();
+  await scheduler.setConfig('vapid_public_key', keys.publicKey);
+  await scheduler.setConfig('vapid_private_key', keys.privateKey);
+  return keys;
+}
+
+// GET /api/push/vapid-key - VAPID 공개키 반환
+app.get('/api/push/vapid-key', async (req, res) => {
   try {
-    const { botToken, chatId } = req.body;
-    if (!botToken || !chatId) {
-      return res.status(400).json({ error: 'Bot Token과 Chat ID를 입력해주세요.' });
+    const keys = await getVapidKeys();
+    res.json({ publicKey: keys.publicKey });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/push/subscribe - 푸시 구독 저장
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ error: '유효하지 않은 구독 정보입니다.' });
     }
-    const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: '✅ 블루파이 재고관리 알림 테스트 성공!' }),
-    });
-    const data = await r.json();
-    if (data.ok) {
-      res.json({ success: true, message: '테스트 메시지 발송 성공' });
-    } else {
-      res.json({ success: false, message: data.description || '발송 실패' });
+    await query(
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE p256dh = VALUES(p256dh), auth = VALUES(auth), created_at = NOW()`,
+      [endpoint, keys.p256dh, keys.auth]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/push/unsubscribe - 푸시 구독 해제
+app.post('/api/push/unsubscribe', async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      await query('DELETE FROM push_subscriptions WHERE endpoint = ?', [endpoint]);
     }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/push/test - 테스트 푸시 발송
+app.post('/api/push/test', async (req, res) => {
+  try {
+    const keys = await getVapidKeys();
+    webpush.setVapidDetails('mailto:bluefi@example.com', keys.publicKey, keys.privateKey);
+
+    const subs = await query('SELECT * FROM push_subscriptions');
+    if (subs.length === 0) {
+      return res.json({ success: false, message: '등록된 구독이 없습니다. 알림을 먼저 허용해주세요.' });
+    }
+
+    const payload = JSON.stringify({ title: '블루파이', body: '✅ 푸시 알림 테스트 성공!' });
+    let sent = 0;
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+        sent++;
+      } catch (e) {
+        if (e.statusCode === 404 || e.statusCode === 410) {
+          await query('DELETE FROM push_subscriptions WHERE id = ?', [sub.id]);
+        }
+      }
+    }
+    res.json({ success: true, message: `${sent}개 기기에 발송 완료` });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

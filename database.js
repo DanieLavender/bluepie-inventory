@@ -97,6 +97,16 @@ async function initDb() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      endpoint VARCHAR(500) UNIQUE NOT NULL,
+      p256dh VARCHAR(255) NOT NULL,
+      auth VARCHAR(255) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // 기존 UTC 저장 order_date를 KST로 마이그레이션 (1회성)
   const [migrated] = await getPool().query(
     "SELECT value FROM sync_config WHERE `key` = 'sales_tz_migrated'"
@@ -144,9 +154,8 @@ async function initDb() {
     ['coupang_access_key', ''],
     ['coupang_secret_key', ''],
     ['coupang_vendor_id', ''],
-    ['telegram_bot_token', ''],
-    ['telegram_chat_id', ''],
-    ['telegram_enabled', 'false'],
+    ['vapid_public_key', ''],
+    ['vapid_private_key', ''],
   ];
   for (const [k, v] of configDefaults) {
     await query(
