@@ -241,12 +241,24 @@ app.get('/api/sales/stats', async (req, res) => {
     const yesterdayOrders = Number(yest[0].orders);
     const avgPrice = todayOrders > 0 ? Math.round(todayRevenue / todayOrders) : 0;
 
+    // 마지막 수집 시간 조회
+    const fetchTimes = await query(
+      "SELECT `key`, value FROM sync_config WHERE `key` IN ('sales_last_fetch_a', 'sales_last_fetch_b', 'sales_last_fetch_c')"
+    );
+    let lastFetchTime = null;
+    for (const row of fetchTimes) {
+      if (row.value && (!lastFetchTime || new Date(row.value) > new Date(lastFetchTime))) {
+        lastFetchTime = row.value;
+      }
+    }
+
     res.json({
       todayRevenue,
       todayOrders,
       avgPrice,
       yesterdayRevenue,
       yesterdayOrders,
+      lastFetchTime,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

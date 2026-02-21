@@ -3906,12 +3906,19 @@
 
     // ===== Sales Page (오늘 현황) =====
 
-    function updateSalesRefreshTime() {
-        const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = String(now.getMinutes()).padStart(2, '0');
-        const s = String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('salesRefreshTime').textContent = `${h}:${m}:${s} 기준`;
+    function updateSalesRefreshTime(isoTime) {
+        const el = document.getElementById('salesRefreshTime');
+        if (!isoTime) {
+            el.textContent = '수집 기록 없음';
+            return;
+        }
+        const d = new Date(isoTime);
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
+        const mon = d.getMonth() + 1;
+        const day = d.getDate();
+        el.textContent = `${mon}/${day} ${h}:${m}:${s} 수집`;
     }
 
     function loadSalesPage() {
@@ -3948,6 +3955,7 @@
                 `주문 ${data.todayOrders}건 · 평균 ${formatCurrency(data.avgPrice)}`;
             document.getElementById('salesYestRevenue').textContent = formatCurrency(data.yesterdayRevenue);
             document.getElementById('salesYestOrders').textContent = data.yesterdayOrders + '건';
+            updateSalesRefreshTime(data.lastFetchTime);
         } catch (e) {
             console.error('매출 통계 로딩 오류:', e);
         }
@@ -3961,13 +3969,11 @@
             const tbody = document.getElementById('salesRecentBody');
 
             if (!data || data.length === 0) {
-                updateSalesRefreshTime();
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);">오늘 주문이 아직 없습니다.</td></tr>';
                 return;
             }
 
             const cancelStatuses = ['CANCELED', 'CANCELED_BY_NOPAYMENT', 'RETURNED', 'EXCHANGED', 'CANCELLED'];
-            updateSalesRefreshTime();
             tbody.innerHTML = data.map(row => {
                 const date = new Date(row.order_date);
                 const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
