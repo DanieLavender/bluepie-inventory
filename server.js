@@ -635,12 +635,6 @@ app.get('/api/sync/returnable-items', async (req, res) => {
             // vendorItemName 파싱: "ob 캐시미어 니트, 아이보리 free" → 상품명/색상/사이즈 분리
             const parsed = parseCoupangItemName(ri.vendorItemName);
 
-            // productName: 브랜드 이니셜이 옵션에만 있으면 prepend
-            let displayName = parsed.productName;
-            if (parsed.brand && !displayName.toLowerCase().startsWith(parsed.brand)) {
-              displayName = `${parsed.brand} ${displayName}`;
-            }
-
             // optionName: parseProductOption 호환 형식
             const optParts = [];
             if (parsed.color) optParts.push(`색상: ${parsed.color}`);
@@ -650,8 +644,9 @@ app.get('/api/sync/returnable-items', async (req, res) => {
             items.push({
               store: 'C',
               productOrderId,
-              productName: displayName,
+              productName: parsed.productName,
               optionName,
+              brand: parsed.brand || '',
               qty: ri.returnQuantity || 1,
               channelProductNo: ri.vendorItemId,
               claimStatus,
@@ -1420,11 +1415,10 @@ function parseCoupangItemName(vendorItemName) {
   // 브랜드: 상품명 앞 또는 끝에서 2글자 영문 이니셜 추출
   let brand = extractBrand(productName);
   if (!brand) {
-    // 끝에 브랜드가 있는 경우: "... 블랙 ob" → brand = "ob"
+    // 끝에 브랜드가 있는 경우: "... 블랙 ob" → brand = "ob" (상품명은 변경하지 않음)
     const endMatch = productName.match(/\s([a-zA-Z]{2})$/);
     if (endMatch) {
       brand = endMatch[1].toLowerCase();
-      productName = productName.slice(0, -endMatch[1].length).trim();
     }
   }
 

@@ -798,6 +798,7 @@
         .brand-sm { background: #2196F3; }
         .brand-ve { background: #00897B; }
         .brand-vi { background: #D81B60; }
+        .brand-ob { background: #FF6F00; }
         .brand-default { background: #9CA3AF; }
 
         /* ===== 15. Color Chip ===== */
@@ -2248,8 +2249,9 @@
     const brandColors = {
         'ag': '#E91E63', 'ed': '#9C27B0', 'hm': '#3F51B5', 'ig': '#00BCD4',
         'it': '#009688', 'lc': '#4CAF50', 'ls': '#8BC34A', 'mo': '#FF9800',
-        'mu': '#FF5722', 'mv': '#795548', 'ov': '#607D8B', 'ps': '#E91E63',
-        'ru': '#673AB7', 'sm': '#2196F3', 've': '#00897B', 'vi': '#D81B60',
+        'mu': '#FF5722', 'mv': '#795548', 'ob': '#FF6F00', 'ov': '#607D8B',
+        'ps': '#E91E63', 'ru': '#673AB7', 'sm': '#2196F3', 've': '#00897B',
+        'vi': '#D81B60',
     };
 
     // ===== State =====
@@ -3285,8 +3287,8 @@
                 html += `<div class="return-status-group">${label} (${groups[st].length}건)</div>`;
 
                 for (const item of groups[st]) {
-                    const { brand } = extractBrandFromName(item.productName || '');
-                    const brandClass = brand ? `brand-${brand}` : 'brand-default';
+                    const brand = item.brand || extractBrandFromName(item.productName || '').brand;
+                    const brandClass = brand ? (brandColors[brand] ? `brand-${brand}` : 'brand-default') : '';
                     const brandBadge = brand ? `<span class="brand-badge ${brandClass}" style="font-size:10px;padding:1px 5px;">${brand}</span>` : '';
                     const storeBadge = item.store === 'C'
                         ? '<span class="store-badge store-coupang">쿠팡</span>'
@@ -3528,8 +3530,8 @@
 
             let html = '';
             for (const item of items) {
-                const { brand } = extractBrandFromName(item.product_name || '');
-                const brandClass = brand ? `brand-${brand}` : 'brand-default';
+                const brand = item.brand || extractBrandFromName(item.product_name || '').brand;
+                const brandClass = brand ? (brandColors[brand] ? `brand-${brand}` : 'brand-default') : '';
                 const brandBadge = brand ? `<span class="brand-badge ${brandClass}" style="font-size:10px;padding:1px 5px;">${brand}</span>` : '';
                 const storeBadge = item.store === 'C'
                     ? '<span class="store-badge store-coupang">쿠팡</span>'
