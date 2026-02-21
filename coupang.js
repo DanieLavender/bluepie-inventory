@@ -168,48 +168,55 @@ class CoupangClient {
     const allReturns = [];
     const from = this.formatCoupangDate(fromDate);
     const to = this.formatCoupangDate(toDate);
+    // 쿠팡 반품 상태별 조회 (status 필수)
+    const statuses = ['UC', 'CC', 'RF'];
 
-    let nextToken = null;
-    do {
-      const params = new URLSearchParams({
-        createdAtFrom: from,
-        createdAtTo: to,
-        maxPerPage: '50',
-      });
-      if (nextToken) {
-        params.set('nextToken', nextToken);
-      }
-
-      const basePath = `/v2/providers/openapi/apis/api/v4/vendors/${this.vendorId}/returnRequests`;
-      const fullPath = `${basePath}?${params.toString()}`;
-
-      let data;
-      try {
-        data = await this.apiCall('GET', fullPath);
-      } catch (e) {
-        console.log(`[${this.storeName}] 반품 조회 오류: ${e.message.slice(0, 100)}`);
-        break;
-      }
-      if (!data || !data.data) break;
-
-      for (const ret of data.data) {
-        allReturns.push({
-          receiptId: ret.receiptId,
-          orderId: ret.orderId,
-          receiptStatus: ret.receiptStatus || '',
-          returnItems: (ret.returnItems || []).map(item => ({
-            vendorItemId: String(item.vendorItemId || ''),
-            vendorItemName: item.vendorItemName || '',
-            returnQuantity: item.returnQuantity || 1,
-            sellerProductItemName: item.sellerProductItemName || '',
-          })),
-          createdAt: ret.createdAt || '',
+    for (const status of statuses) {
+      let nextToken = null;
+      do {
+        const params = new URLSearchParams({
+          createdAtFrom: from,
+          createdAtTo: to,
+          status,
+          maxPerPage: '50',
         });
-      }
+        if (nextToken) {
+          params.set('nextToken', nextToken);
+        }
 
-      nextToken = data.nextToken || null;
-      if (nextToken) await this.sleep(150);
-    } while (nextToken);
+        const basePath = `/v2/providers/openapi/apis/api/v4/vendors/${this.vendorId}/returnRequests`;
+        const fullPath = `${basePath}?${params.toString()}`;
+
+        let data;
+        try {
+          data = await this.apiCall('GET', fullPath);
+        } catch (e) {
+          console.log(`[${this.storeName}] 반품 ${status} 조회: ${e.message.slice(0, 100)}`);
+          break;
+        }
+        if (!data || !data.data) break;
+
+        for (const ret of data.data) {
+          allReturns.push({
+            receiptId: ret.receiptId,
+            orderId: ret.orderId,
+            receiptStatus: ret.receiptStatus || status,
+            returnItems: (ret.returnItems || []).map(item => ({
+              vendorItemId: String(item.vendorItemId || ''),
+              vendorItemName: item.vendorItemName || '',
+              returnQuantity: item.returnQuantity || 1,
+              sellerProductItemName: item.sellerProductItemName || '',
+            })),
+            createdAt: ret.createdAt || '',
+          });
+        }
+
+        nextToken = data.nextToken || null;
+        if (nextToken) await this.sleep(150);
+      } while (nextToken);
+
+      await this.sleep(100);
+    }
 
     return allReturns;
   }
