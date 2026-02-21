@@ -497,12 +497,16 @@ app.get('/api/sync/returnable-items', async (req, res) => {
   try {
     await initSyncClients();
     const hours = parseInt(req.query.hours) || 72;
+    const debug = req.query.debug === '1';
     const now = new Date();
     const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
 
     // 1. 반품완료 + 수거완료 건 조회
     const returnableOrders = await scheduler.storeA.getReturnableOrders(from.toISOString(), now.toISOString());
+    console.log(`[Returnable] 1단계: ${returnableOrders.length}건 감지 (${hours}시간, ${from.toISOString()} ~ ${now.toISOString()})`);
+
     if (returnableOrders.length === 0) {
+      if (debug) return res.json({ items: [], debug: { step1_returnable: 0, hours, from: from.toISOString(), to: now.toISOString() } });
       return res.json([]);
     }
 
@@ -514,6 +518,7 @@ app.get('/api/sync/returnable-items', async (req, res) => {
     }
 
     const details = await scheduler.storeA.getProductOrderDetail(orderIds);
+    console.log(`[Returnable] 2단계: 상세 ${details.length}건 조회`);
 
     // 3. sync_log에서 이미 inventory_update 처리된 productOrderId 제외
     let processedIds = new Set();
@@ -525,6 +530,7 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       );
       processedIds = new Set(logRows.map(r => r.product_order_id));
     }
+    console.log(`[Returnable] 3단계: 이미 처리됨 ${processedIds.size}건 제외`);
 
     // 4. 정리된 목록 반환
     const items = [];
@@ -543,6 +549,23 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       });
     }
 
+    console.log(`[Returnable] 4단계: 최종 ${items.length}건 반환`);
+    if (debug) {
+      return res.json({
+        items,
+        debug: {
+          hours,
+          from: from.toISOString(),
+          to: now.toISOString(),
+          step1_returnable: returnableOrders.length,
+          step1_statuses: returnableOrders.map(o => ({ id: o.productOrderId, status: o.claimStatus })),
+          step2_details: details.length,
+          step3_alreadyProcessed: processedIds.size,
+          step3_processedIds: [...processedIds],
+          step4_final: items.length,
+        }
+      });
+    }
     res.json(items);
   } catch (e) {
     res.status(500).json({ error: e.message });
