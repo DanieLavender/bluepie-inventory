@@ -2538,15 +2538,21 @@
     }
 
     function buildReturnItemHtml(item) {
-        const name = item.productName || '';
+        const fullName = item.productName || '';
         const option = item.optionName || '';
         const orderId = item.productOrderId || '';
         const dateStr = formatReturnDate(item.lastChangedDate);
         const buyer = item.ordererName || '';
         const shortOrderId = orderId.length > 8 ? '...' + orderId.slice(-8) : orderId;
-        const infoLine = [dateStr, buyer, shortOrderId].filter(Boolean).join(' · ');
 
-        const nameHtml = '<span style="font-weight:600;">' + name + '</span>';
+        // 브랜드 추출
+        const { brand, name } = extractBrandFromName(fullName);
+        const brandBadge = brand
+            ? '<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:var(--accent-lighter);color:var(--accent);margin-right:4px;">' + brand.toUpperCase() + '</span>'
+            : '';
+
+        const infoLine = [dateStr, buyer, shortOrderId].filter(Boolean).join(' · ');
+        const nameHtml = '<span style="font-weight:600;">' + brandBadge + name + '</span>';
         const optionHtml = option ? '<span style="font-size:12px;color:var(--accent);font-weight:600;">&#9679; ' + option + '</span>' : '';
         const infoHtml = '<span style="font-size:10px;color:var(--text-muted);">' + infoLine + '</span>';
 
@@ -2565,6 +2571,23 @@
             + '<span class="item-qty">' + item.qty + '개</span></div>';
     }
 
+    // 상품명에서 브랜드 코드 추출 (앞 또는 뒤 2글자 영문)
+    // 예: "hm 캐시미어 울 니트" → { brand: "hm", name: "캐시미어 울 니트" }
+    // 예: "[캐시미어 울 니트] 홀가먼트 블랙 it" → { brand: "it", name: "[캐시미어 울 니트] 홀가먼트 블랙" }
+    function extractBrandFromName(fullName) {
+        // 1. 앞에서 추출: "hm 상품명..."
+        const startMatch = fullName.match(/^([a-zA-Z]{2})\s/);
+        if (startMatch) {
+            return { brand: startMatch[1].toLowerCase(), name: fullName.slice(startMatch[0].length) };
+        }
+        // 2. 뒤에서 추출: "...상품명 it"
+        const endMatch = fullName.match(/\s([a-zA-Z]{2})$/);
+        if (endMatch) {
+            return { brand: endMatch[1].toLowerCase(), name: fullName.slice(0, -endMatch[0].length) };
+        }
+        return { brand: '', name: fullName };
+    }
+
     // 원본 데이터에서 직접 추출 (문자열 파싱 대신)
     function selectNaverReturnById(productOrderId) {
         const items = window._naverReturnItems || [];
@@ -2574,11 +2597,7 @@
         const fullName = item.productName || '';
         const option = item.optionName || '';
 
-        // 브랜드: 상품명 앞 2글자 영문
-        const brandMatch = fullName.match(/^([a-zA-Z]{2})\s/);
-        const brand = brandMatch ? brandMatch[1].toLowerCase() : '';
-        // 상품명: 브랜드 접두사 제거
-        const productName = brandMatch ? fullName.slice(brandMatch[0].length) : fullName;
+        const { brand, name: productName } = extractBrandFromName(fullName);
 
         // 브랜드 자동 선택
         const brandSelect = document.getElementById('inputBrand');
@@ -2615,10 +2634,7 @@
 
         const first = items[0];
         const totalQty = items.reduce((s, i) => s + i.qty, 0);
-        const name = first.productName || '';
-        const brandMatch = name.match(/^([a-zA-Z]{2})\s/);
-        const brand = brandMatch ? brandMatch[1].toLowerCase() : '';
-        const productName = brandMatch ? name.slice(brandMatch[0].length) : name;
+        const { brand, name: productName } = extractBrandFromName(first.productName || '');
         // 색상: 여러 옵션 합쳐서 표시
         const colors = items.map(i => i.optionName || '기본');
         const colorStr = colors.join(', ');

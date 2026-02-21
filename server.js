@@ -562,20 +562,20 @@ app.get('/api/sync/returnable-items', async (req, res) => {
         alreadyAdded: processedIds.has(productOrderId),
       };
 
-      // 디버그: 상세 응답의 주요 필드 로깅
-      console.log(`[Returnable] 항목: ${po.productName} / ${po.optionName || '(옵션없음)'} claimStatus=${claimStatus} orderer=${item.ordererName}`);
+      // 첫 번째 항목: 전체 필드 구조 로깅 (옵션/색상 필드 탐색용)
+      if (items.length === 0) {
+        console.log(`[Returnable] 첫 항목 productOrder 키:`, Object.keys(po).join(', '));
+        console.log(`[Returnable] 첫 항목 order 키:`, Object.keys(order).join(', '));
+        // 옵션 관련 필드 전부 출력
+        const optionFields = Object.entries(po).filter(([k]) =>
+          /option|color|variant|select|choice/i.test(k)
+        );
+        console.log(`[Returnable] 옵션 관련 필드:`, JSON.stringify(optionFields));
+        console.log(`[Returnable] 첫 항목 전체 po:`, JSON.stringify(po).slice(0, 2000));
+      }
 
       if (debug) {
-        item._debug = {
-          productOrderStatus: po.productOrderStatus,
-          claimType: po.claimType,
-          claimStatus: po.claimStatus,
-          optionName: po.optionName,
-          productId: po.productId,
-          channelProductNo: po.channelProductNo,
-          originalProductId: po.originalProductId,
-          ordererName: order.ordererName,
-        };
+        item._debug = { po: Object.keys(po), order: Object.keys(order), poFull: po };
       }
 
       items.push(item);
