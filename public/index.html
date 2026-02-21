@@ -548,6 +548,118 @@
         .col-date { width: 130px; }
         .col-more { width: 50px; text-align: center; }
 
+        /* ===== 12.5. View Toggle + Grouped View ===== */
+        .view-toggle {
+            display: flex;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .view-toggle-btn {
+            padding: 6px 10px;
+            font-size: 12px;
+            background: white;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+        .view-toggle-btn:not(:last-child) { border-right: 1px solid var(--border); }
+        .view-toggle-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+        .view-toggle-btn:hover:not(.active) { background: var(--bg-primary); }
+        .group-header-row {
+            background: #F8FAFC;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-header-row:hover { background: #F1F5F9; }
+        .group-header-row td { font-weight: 600; border-bottom: 1px solid var(--border); }
+        .group-summary {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 400;
+            margin-left: 8px;
+        }
+        .group-toggle-icon {
+            transition: transform 0.2s;
+            display: inline-block;
+            font-size: 12px;
+            color: var(--text-muted);
+            width: 20px;
+            text-align: center;
+        }
+        .group-toggle-icon.expanded { transform: rotate(90deg); }
+        .variant-row td { padding-top: 6px; padding-bottom: 6px; }
+        .variant-row .col-name {
+            padding-left: 32px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        .group-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .group-card-header {
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-card-header:hover { background: var(--bg-primary); }
+        .group-card-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            flex: 1;
+        }
+        .group-card-name {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .group-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .group-card-qty {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--accent);
+        }
+        .group-card-variants { border-top: 1px solid var(--border); }
+        .group-variant-item {
+            padding: 8px 12px 8px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+        .group-variant-item:last-child { border-bottom: none; }
+        .group-variant-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
         /* ===== 13. Custom Checkbox ===== */
         .custom-check {
             appearance: none;
@@ -1573,6 +1685,14 @@
                         <option value="color-asc">컬러 오름차순</option>
                         <option value="updated-desc">최근 수정순</option>
                     </select>
+                    <div class="view-toggle">
+                        <button class="view-toggle-btn active" id="viewFlatBtn" onclick="setViewMode('flat')" title="리스트 뷰">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        </button>
+                        <button class="view-toggle-btn" id="viewGroupBtn" onclick="setViewMode('grouped')" title="그룹 뷰">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        </button>
+                    </div>
                     <span class="filter-count" id="filterCount"></span>
                 </div>
 
@@ -2035,9 +2155,12 @@
     let totalPages = 1;
     let totalItems = 0;
     let currentItems = [];
+    let currentGroups = [];
     let selectedIds = new Set();
     let searchTimer = null;
     let pendingDeleteIds = [];
+    let viewMode = localStorage.getItem('viewMode') || 'flat';
+    let expandedGroups = new Set();
 
     // ===== Router =====
     const pageTitles = {
@@ -2241,19 +2364,60 @@
         const params = new URLSearchParams();
         if (search) params.set('search', search);
         if (brand) params.set('brand', brand);
-        if (sort) params.set('sort', sort);
-        params.set('page', currentPage);
-        params.set('limit', 30);
+
+        if (viewMode === 'grouped') {
+            params.set('sort', 'name-asc');
+            params.set('limit', 9999);
+        } else {
+            if (sort) params.set('sort', sort);
+            params.set('page', currentPage);
+            params.set('limit', 30);
+        }
 
         try {
             const data = await api(`/api/inventory?${params}`);
             currentItems = data.items;
             totalPages = data.totalPages;
             totalItems = data.total;
+            if (viewMode === 'grouped') {
+                currentGroups = groupItems(currentItems);
+            }
             render();
         } catch (e) {
             showToast('데이터를 불러올 수 없습니다: ' + e.message, 'error');
         }
+    }
+
+    function groupItems(items) {
+        const map = new Map();
+        for (const item of items) {
+            const key = item.name;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(item);
+        }
+        return [...map.entries()].map(([name, variants]) => ({
+            name,
+            brand: variants[0].brand,
+            totalQty: variants.reduce((s, v) => s + v.qty, 0),
+            variants,
+        }));
+    }
+
+    function setViewMode(mode) {
+        viewMode = mode;
+        localStorage.setItem('viewMode', mode);
+        document.getElementById('viewFlatBtn').classList.toggle('active', mode === 'flat');
+        document.getElementById('viewGroupBtn').classList.toggle('active', mode === 'grouped');
+        document.getElementById('sortSelect').disabled = (mode === 'grouped');
+        expandedGroups.clear();
+        currentPage = 1;
+        loadData();
+    }
+
+    function toggleGroup(groupName) {
+        if (expandedGroups.has(groupName)) expandedGroups.delete(groupName);
+        else expandedGroups.add(groupName);
+        render();
     }
 
     function debounceSearch() {
@@ -2266,12 +2430,16 @@
 
     // ===== Render =====
     function render() {
+        if (viewMode === 'grouped') return renderGrouped();
+        return renderFlat();
+    }
+
+    function renderFlat() {
         const tbody = document.getElementById('tableBody');
         const cardList = document.getElementById('cardList');
         const emptyState = document.getElementById('emptyState');
         const footer = document.getElementById('tableFooter');
 
-        // Filter count
         document.getElementById('filterCount').textContent = `${totalItems}건`;
 
         if (currentItems.length === 0) {
@@ -2375,6 +2543,137 @@
         renderPagination();
         updateBulkActions();
         document.getElementById('selectAll').checked = false;
+    }
+
+    function renderGrouped() {
+        const tbody = document.getElementById('tableBody');
+        const cardList = document.getElementById('cardList');
+        const emptyState = document.getElementById('emptyState');
+        const footer = document.getElementById('tableFooter');
+
+        document.getElementById('filterCount').textContent = `${totalItems}건 (${currentGroups.length}그룹)`;
+        footer.style.display = 'none'; // 그룹 뷰에서는 페이지네이션 숨김
+
+        if (currentGroups.length === 0) {
+            tbody.innerHTML = '';
+            cardList.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+        emptyState.style.display = 'none';
+
+        // Desktop grouped table
+        let tableHtml = '';
+        currentGroups.forEach((group, gIdx) => {
+            const brandClass = group.brand ? `brand-${group.brand}` : 'brand-default';
+            const brandHtml = group.brand
+                ? `<span class="brand-badge ${brandClass}">${group.brand}</span>`
+                : '';
+            const variantCount = group.variants.length;
+            const isExpanded = expandedGroups.has(group.name) || variantCount === 1;
+            const toggleIcon = variantCount === 1 ? '' : `<span class="group-toggle-icon ${isExpanded ? 'expanded' : ''}">&#9654;</span>`;
+            const escapedName = escapeAttr(group.name);
+
+            tableHtml += `<tr class="group-header-row" onclick="toggleGroup('${escapedName}')">
+                <td class="col-check"></td>
+                <td class="col-no" style="color:var(--text-muted);font-size:11px;">${gIdx + 1}</td>
+                <td class="col-brand">${brandHtml}</td>
+                <td class="col-name">${escapeHtml(group.name)}<span class="group-summary">총 ${group.totalQty}개 (${variantCount}종)</span></td>
+                <td class="col-color"></td>
+                <td class="col-size"></td>
+                <td class="col-qty"><span style="font-weight:700">${group.totalQty}</span></td>
+                <td class="col-date"></td>
+                <td class="col-more">${toggleIcon}</td>
+            </tr>`;
+
+            if (isExpanded) {
+                group.variants.forEach(item => {
+                    const colorHex = getColorHex(item.color);
+                    const colorDot = colorHex ? `<span class="color-dot" style="background:${colorHex}"></span>` : '';
+                    const upd = formatUpdatedAt(item.updated_at);
+                    const updHtml = item.updated_at
+                        ? `<span class="date-text ${upd.isRecent ? 'recent' : ''}">${upd.timeText}</span>`
+                        : '<span style="color:var(--text-muted);font-size:12px;">-</span>';
+                    const qtyClass = item.qty === 0 ? 'qty-value qty-zero' : 'qty-value';
+
+                    tableHtml += `<tr class="variant-row">
+                        <td class="col-check"><input type="checkbox" class="custom-check" ${selectedIds.has(item.id) ? 'checked' : ''} onchange="toggleSelect(${item.id})"></td>
+                        <td class="col-no"></td>
+                        <td class="col-brand"></td>
+                        <td class="col-name"></td>
+                        <td class="col-color"><span class="color-chip">${colorDot}${escapeHtml(item.color)}</span></td>
+                        <td class="col-size">${item.size ? escapeHtml(item.size) : '<span style="color:var(--text-muted)">-</span>'}</td>
+                        <td class="col-qty">
+                            <div class="qty-group">
+                                <button class="qty-btn qty-btn-minus" onclick="event.stopPropagation();changeQty(${item.id}, ${item.qty}, -1)">-</button>
+                                <span class="${qtyClass}" id="qty-${item.id}" onclick="event.stopPropagation();startEditQty(${item.id}, ${item.qty})">${item.qty}</span>
+                                <button class="qty-btn" onclick="event.stopPropagation();changeQty(${item.id}, ${item.qty}, 1)">+</button>
+                            </div>
+                        </td>
+                        <td class="col-date">${updHtml}</td>
+                        <td class="col-more">
+                            <button class="more-btn" onclick="event.stopPropagation();openDropdown(event, ${item.id}, '${escapeAttr(item.name)}', '${escapeAttr(item.color)}', ${item.qty})">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                            </button>
+                        </td>
+                    </tr>`;
+                });
+            }
+        });
+        tbody.innerHTML = tableHtml;
+
+        // Mobile grouped cards
+        let cardHtml = '';
+        currentGroups.forEach(group => {
+            const brandClass = group.brand ? `brand-${group.brand}` : 'brand-default';
+            const brandHtml = group.brand
+                ? `<span class="brand-badge ${brandClass}" style="font-size:10px;padding:1px 5px;">${group.brand}</span>`
+                : '';
+            const variantCount = group.variants.length;
+            const isExpanded = expandedGroups.has(group.name) || variantCount === 1;
+            const toggleIcon = variantCount === 1 ? '' : `<span class="group-toggle-icon ${isExpanded ? 'expanded' : ''}">&#9654;</span>`;
+            const escapedName = escapeAttr(group.name);
+
+            cardHtml += `<div class="group-card">
+                <div class="group-card-header" onclick="toggleGroup('${escapedName}')">
+                    <div class="group-card-left">
+                        ${brandHtml}
+                        <span class="group-card-name">${escapeHtml(group.name)}</span>
+                    </div>
+                    <div class="group-card-meta">
+                        <span class="group-card-qty">${group.totalQty}개</span>
+                        <span style="color:var(--text-muted);font-size:11px;">${variantCount}종</span>
+                        ${toggleIcon}
+                    </div>
+                </div>`;
+
+            if (isExpanded) {
+                cardHtml += `<div class="group-card-variants">`;
+                group.variants.forEach(item => {
+                    const colorHex = getColorHex(item.color);
+                    const colorDot = colorHex ? `<span class="color-dot" style="background:${colorHex}"></span>` : '';
+                    const qtyStyle = item.qty === 0 ? 'color:var(--danger);font-weight:700' : '';
+
+                    cardHtml += `<div class="group-variant-item">
+                        <div class="group-variant-left">
+                            ${colorDot}
+                            <span>${escapeHtml(item.color)}${item.size ? ' · ' + escapeHtml(item.size) : ''}</span>
+                        </div>
+                        <div class="qty-group">
+                            <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)" style="width:26px;height:26px;">-</button>
+                            <span class="qty-value" style="${qtyStyle}" id="mq-${item.id}" onclick="startEditQtyMobile(${item.id}, ${item.qty})">${item.qty}</span>
+                            <button class="qty-btn" onclick="changeQty(${item.id}, ${item.qty}, 1)" style="width:26px;height:26px;">+</button>
+                        </div>
+                    </div>`;
+                });
+                cardHtml += `</div>`;
+            }
+
+            cardHtml += `</div>`;
+        });
+        cardList.innerHTML = cardHtml;
+
+        updateBulkActions();
     }
 
     function renderPagination() {
@@ -3707,6 +4006,12 @@
 
     // ===== Init =====
     async function init() {
+        // viewMode 복원
+        if (viewMode === 'grouped') {
+            document.getElementById('viewFlatBtn').classList.remove('active');
+            document.getElementById('viewGroupBtn').classList.add('active');
+            document.getElementById('sortSelect').disabled = true;
+        }
         router();
         await Promise.all([loadStats(), loadBrands(), loadData()]);
         updateRefreshTime();
