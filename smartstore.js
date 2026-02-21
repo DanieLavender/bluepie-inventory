@@ -603,16 +603,12 @@ class NaverCommerceClient {
       cursor = chunkEnd;
     }
 
-    // 반품 관련 필터
+    // 반품 관련 필터: claimType=RETURN인 것 전부 (현재 상태는 상세 조회에서 판별)
+    // COLLECT_DONE은 교환 전용이므로 last-changed-statuses로 반품 수거완료 조회 불가
+    // → CLAIM_REQUESTED로 들어온 반품 요청 건이 현재 수거완료 상태일 수 있음
     const returnStatuses = allStatuses.filter(s => {
       const claimType = (s.claimType || '').toUpperCase();
-      const claimStatus = (s.claimStatus || '').toUpperCase();
-      const orderStatus = (s.productOrderStatus || '').toUpperCase();
-      return claimType === 'RETURN' && (
-        claimStatus === 'RETURN_DONE' ||
-        claimStatus === 'COLLECT_DONE' ||
-        orderStatus === 'RETURNED'
-      );
+      return claimType === 'RETURN';
     });
 
     // 분포 로깅

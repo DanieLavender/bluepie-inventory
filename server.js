@@ -546,8 +546,8 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       const productOrderId = po.productOrderId || '';
       const info = statusInfoMap[productOrderId] || {};
 
-      // claimStatus: statusInfoMap에서 먼저, 없으면 상세 조회 결과에서 가져오기
-      const claimStatus = info.claimStatus || po.claimStatus || '';
+      // claimStatus: 상세 조회의 현재 상태 우선 (last-changed-statuses는 과거 시점 상태)
+      const claimStatus = po.claimStatus || info.claimStatus || '';
 
       const item = {
         productOrderId,
@@ -562,17 +562,13 @@ app.get('/api/sync/returnable-items', async (req, res) => {
         alreadyAdded: processedIds.has(productOrderId),
       };
 
-      // 첫 번째 항목: 전체 필드 구조 로깅 (옵션/색상 필드 탐색용)
+      // 첫 번째 항목: 전체 필드 구조 로깅
       if (items.length === 0) {
-        console.log(`[Returnable] 첫 항목 productOrder 키:`, Object.keys(po).join(', '));
+        console.log(`[Returnable] 첫 항목 po 키:`, Object.keys(po).join(', '));
         console.log(`[Returnable] 첫 항목 order 키:`, Object.keys(order).join(', '));
-        // 옵션 관련 필드 전부 출력
-        const optionFields = Object.entries(po).filter(([k]) =>
-          /option|color|variant|select|choice/i.test(k)
-        );
-        console.log(`[Returnable] 옵션 관련 필드:`, JSON.stringify(optionFields));
-        console.log(`[Returnable] 첫 항목 전체 po:`, JSON.stringify(po).slice(0, 2000));
+        console.log(`[Returnable] 첫 항목 po 전체:`, JSON.stringify(po).slice(0, 2000));
       }
+      console.log(`[Returnable] ${po.productName?.slice(0,30)} / opt=${po.optionName} / claimStatus(detail)=${po.claimStatus} claimStatus(change)=${info.claimStatus}`);
 
       if (debug) {
         item._debug = { po: Object.keys(po), order: Object.keys(order), poFull: po };

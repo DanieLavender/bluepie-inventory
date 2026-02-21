@@ -2478,18 +2478,28 @@
             // 전역에 저장 (합산 선택용)
             window._naverReturnItems = items;
 
-            // 상태별 그룹
-            const returnDone = items.filter(i => i.claimStatus === 'RETURN_DONE');
+            // 상태별 그룹 (상세 조회의 현재 claimStatus 기준)
             const collectDone = items.filter(i => i.claimStatus === 'COLLECT_DONE');
+            const returnDone = items.filter(i => i.claimStatus === 'RETURN_DONE');
+            const returnRequest = items.filter(i => i.claimStatus === 'RETURN_REQUEST');
+            const others = items.filter(i => !['COLLECT_DONE','RETURN_DONE','RETURN_REQUEST'].includes(i.claimStatus));
 
             let html = '';
+            if (collectDone.length > 0) {
+                html += '<div class="naver-return-group">&#128230; 수거완료 (' + collectDone.length + ')</div>';
+                html += collectDone.map(i => buildReturnItemHtml(i)).join('');
+            }
             if (returnDone.length > 0) {
                 html += '<div class="naver-return-group">&#128260; 반품완료 (' + returnDone.length + ')</div>';
                 html += returnDone.map(i => buildReturnItemHtml(i)).join('');
             }
-            if (collectDone.length > 0) {
-                html += '<div class="naver-return-group">&#128230; 수거완료 (' + collectDone.length + ')</div>';
-                html += collectDone.map(i => buildReturnItemHtml(i)).join('');
+            if (returnRequest.length > 0) {
+                html += '<div class="naver-return-group">&#128203; 반품요청 (' + returnRequest.length + ')</div>';
+                html += returnRequest.map(i => buildReturnItemHtml(i)).join('');
+            }
+            if (others.length > 0) {
+                html += '<div class="naver-return-group">&#128196; 기타 (' + others.length + ')</div>';
+                html += others.map(i => buildReturnItemHtml(i)).join('');
             }
 
             // 동일 상품 색상별 합산 그룹
