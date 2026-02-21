@@ -2667,11 +2667,16 @@
                     const colorHex = getColorHex(item.color);
                     const colorDot = colorHex ? `<span class="color-dot" style="background:${colorHex}"></span>` : '';
                     const qtyStyle = item.qty === 0 ? 'color:var(--danger);font-weight:700' : '';
+                    const upd = formatUpdatedAt(item.updated_at);
+                    const updHtml = item.updated_at
+                        ? `<span class="date-text ${upd.isRecent ? 'recent' : ''}" style="font-size:11px;margin-left:auto;margin-right:6px;">${upd.timeText}</span>`
+                        : '';
 
                     cardHtml += `<div class="group-variant-item">
                         <div class="group-variant-left">
                             ${colorDot}
                             <span>${escapeHtml(item.color)}${item.size ? ' · ' + escapeHtml(item.size) : ''}</span>
+                            ${updHtml}
                         </div>
                         <div class="qty-group">
                             <button class="qty-btn qty-btn-minus" onclick="changeQty(${item.id}, ${item.qty}, -1)" style="width:26px;height:26px;">-</button>
