@@ -111,6 +111,24 @@ async function initDb() {
     console.log('[DB] sales_orders order_date UTC→KST 마이그레이션 완료');
   }
 
+  // 쿠팡 금액 0 레코드 삭제 마이그레이션 (1회성 - 가격 필드 수정 전 데이터)
+  const [cpgMigrated] = await getPool().query(
+    "SELECT value FROM sync_config WHERE `key` = 'cpg_price_fix_migrated'"
+  ).catch(() => [[]]);
+  if (!cpgMigrated || cpgMigrated.length === 0 || cpgMigrated[0]?.value !== 'true') {
+    const delResult = await query(
+      "DELETE FROM sales_orders WHERE store = 'C' AND total_amount = 0"
+    ).catch(() => ({ affectedRows: 0 }));
+    // sales_last_fetch_c 리셋하여 재수집 유도
+    await query(
+      "UPDATE sync_config SET value = '' WHERE `key` = 'sales_last_fetch_c'"
+    ).catch(() => {});
+    await query(
+      "INSERT INTO sync_config (`key`, value) VALUES ('cpg_price_fix_migrated', 'true') ON DUPLICATE KEY UPDATE value = 'true'"
+    ).catch(() => {});
+    console.log(`[DB] 쿠팡 금액 0 레코드 삭제: ${delResult.affectedRows || 0}건, last_fetch 리셋`);
+  }
+
   // Seed sync_config defaults
   const configDefaults = [
     ['sync_enabled', 'false'],
