@@ -560,52 +560,45 @@ class NaverCommerceClient {
    * @returns {Array} { productOrderId, claimStatus } objects
    */
   async getReturnableOrders(fromDate, toDate) {
-    // CLAIM_REQUESTED: 클레임 접수 건 (반품/교환 요청 → COLLECT_DONE 이전 단계도 포함)
-    // COLLECT_DONE: 수거완료 건
-    // CLAIM_COMPLETED: 반품완료 건
-    const typesToCheck = ['CLAIM_REQUESTED', 'COLLECT_DONE', 'CLAIM_COMPLETED'];
+    // lastChangedType 생략 → 모든 상태 변경 포함
+    // 네이버 API에서 반품 수거완료는 COLLECT_DONE lastChangedType에 안 잡힘 (교환 전용)
+    // → 전체 조회 후 claimType=RETURN 필터
     const allStatuses = [];
     const fromMs = new Date(fromDate).getTime();
     const toMs = new Date(toDate).getTime();
     const DAY = 24 * 60 * 60 * 1000;
 
-    // 24시간씩 청크 × 타입별 조회
+    // 24시간씩 청크 조회
     let cursor = fromMs;
     while (cursor < toMs) {
       const chunkEnd = Math.min(cursor + DAY, toMs);
       const chunkFrom = new Date(cursor).toISOString();
       const chunkTo = new Date(chunkEnd).toISOString();
 
-      for (const changeType of typesToCheck) {
-        try {
-          const params = new URLSearchParams({
-            lastChangedFrom: chunkFrom,
-            lastChangedTo: chunkTo,
-            lastChangedType: changeType,
-          });
+      try {
+        const params = new URLSearchParams({
+          lastChangedFrom: chunkFrom,
+          lastChangedTo: chunkTo,
+        });
 
-          const data = await this.apiCall(
-            'GET',
-            `/v1/pay-order/seller/product-orders/last-changed-statuses?${params}`
-          );
+        const data = await this.apiCall(
+          'GET',
+          `/v1/pay-order/seller/product-orders/last-changed-statuses?${params}`
+        );
 
-          const found = data?.data?.lastChangeStatuses || [];
-          if (found.length > 0) {
-            console.log(`[${this.storeName}] ${changeType} ${chunkFrom.slice(0,10)}: ${found.length}건 발견`);
-            found.forEach(s => console.log(`  → claimType=${s.claimType} claimStatus=${s.claimStatus} orderStatus=${s.productOrderStatus} id=${s.productOrderId}`));
-          }
-          for (const s of found) allStatuses.push(s);
-        } catch (e) {
-          console.log(`[${this.storeName}] ${changeType} ${chunkFrom.slice(0,10)} 오류:`, e.message);
+        const found = data?.data?.lastChangeStatuses || [];
+        if (found.length > 0) {
+          console.log(`[${this.storeName}] 전체변경 ${chunkFrom.slice(0,10)}: ${found.length}건`);
         }
-        await this.sleep(200);
+        for (const s of found) allStatuses.push(s);
+      } catch (e) {
+        console.log(`[${this.storeName}] 전체변경 ${chunkFrom.slice(0,10)} 오류:`, e.message);
       }
+      await this.sleep(200);
       cursor = chunkEnd;
     }
 
-    // 반품 관련 필터: claimType=RETURN인 것 전부 (현재 상태는 상세 조회에서 판별)
-    // COLLECT_DONE은 교환 전용이므로 last-changed-statuses로 반품 수거완료 조회 불가
-    // → CLAIM_REQUESTED로 들어온 반품 요청 건이 현재 수거완료 상태일 수 있음
+    // 반품 관련 필터: claimType=RETURN인 건 (수거완료/반품완료 등 모든 단계 포함)
     const returnStatuses = allStatuses.filter(s => {
       const claimType = (s.claimType || '').toUpperCase();
       return claimType === 'RETURN';
