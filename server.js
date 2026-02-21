@@ -1029,15 +1029,29 @@ async function initCoupangClient() {
     console.log('[Sync] 설정 확인 오류:', e.message);
   }
 
-  // 앱 업데이트 감지 → 푸시 알림
+  // 앱 업데이트 감지 → 푸시 알림 (커밋 메시지 포함)
   try {
     const currentVersion = process.env.RENDER_GIT_COMMIT || null;
     if (currentVersion) {
       const storedVersion = await scheduler.getConfig('app_version');
       if (storedVersion !== currentVersion) {
         const shortHash = currentVersion.slice(0, 7);
-        await scheduler.sendPushNotification('앱 업데이트', `블루파이가 새 버전으로 업데이트되었습니다. (${shortHash})`);
-        console.log(`[Update] 새 버전 감지: ${storedVersion.slice(0,7)} → ${shortHash}`);
+        // GitHub API에서 커밋 메시지 가져오기
+        let commitMsg = '';
+        try {
+          const res = await fetch(`https://api.github.com/repos/DanieLavender/bluefi-inventory/commits/${currentVersion}`);
+          if (res.ok) {
+            const data = await res.json();
+            commitMsg = (data.commit?.message || '').split('\n')[0]; // 첫 줄만
+          }
+        } catch (e) {
+          console.log('[Update] 커밋 메시지 조회 실패:', e.message);
+        }
+        const body = commitMsg
+          ? `${commitMsg} (${shortHash})`
+          : `새 버전으로 업데이트되었습니다. (${shortHash})`;
+        await scheduler.sendPushNotification('앱 업데이트', body);
+        console.log(`[Update] 새 버전 감지: ${storedVersion?.slice(0,7) || 'none'} → ${shortHash} — ${commitMsg || '(메시지 없음)'}`);
       }
       await scheduler.setConfig('app_version', currentVersion);
     }
