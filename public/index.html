@@ -449,6 +449,21 @@
             border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s; white-space:nowrap;
         }
         .return-cancel-btn:hover { color:var(--danger); border-color:var(--danger); background:#FEF2F2; }
+        .return-btn-group {
+            display:inline-flex; align-items:center; gap:4px; margin-left:auto; flex-shrink:0;
+        }
+        .return-store-btn {
+            padding:4px 8px; font-size:11px; font-weight:600;
+            color:#059669; background:#ECFDF5; border:1px solid #A7F3D0;
+            border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s; white-space:nowrap;
+        }
+        .return-store-btn:hover { background:#059669; color:white; border-color:#059669; }
+        .return-done-tag {
+            display:inline-flex; align-items:center; gap:2px;
+            padding:4px 8px; font-size:10px; font-weight:600;
+            color:#16A34A; background:#F0FDF4; border:1px solid #BBF7D0;
+            border-radius:var(--radius-sm); white-space:nowrap;
+        }
         .return-item-added {
             opacity: 0.5;
         }
@@ -3283,7 +3298,7 @@
 
                     const buyerName = item.ordererName ? `<span class="return-item-buyer">${escapeHtml(item.ordererName)}</span>` : '';
 
-                    // 버튼 분기: 추가완료 > 실수거완료됨 > 실수거완료(수거완료) > +추가(반품완료)
+                    // 버튼 분기
                     const added = item.alreadyAdded;
                     const confirmed = item.confirmedPickup;
                     const canConfirm = (st === 'COLLECT_DONE');
@@ -3298,7 +3313,16 @@
                     } else if (canConfirm) {
                         btnHtml = `<button class="return-confirm-btn" onclick="confirmPickup('${item.productOrderId}', this)">실수거완료</button>`;
                     } else if (st === 'RETURN_DONE') {
-                        btnHtml = `<button class="return-add-btn" onclick="addFromRecentReturn('${item.productOrderId}', this)">+ 추가</button>`;
+                        // 반품완료: 스토어 추가 + 재고 추가 분리
+                        const sDone = item.storeAdded;
+                        const iDone = item.inventoryAdded;
+                        const storeHtml = sDone
+                            ? '<span class="return-done-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>스토어</span>'
+                            : `<button class="return-store-btn" onclick="copyToStore('${item.productOrderId}', this)">스토어 추가</button>`;
+                        const invHtml = iDone
+                            ? '<span class="return-done-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>재고</span>'
+                            : `<button class="return-add-btn" onclick="addFromRecentReturn('${item.productOrderId}', this)">재고 추가</button>`;
+                        btnHtml = `<div class="return-btn-group">${storeHtml}${invHtml}</div>`;
                     }
 
                     html += `<div class="${rowClass}" data-order-id="${item.productOrderId}">
@@ -3403,6 +3427,46 @@
         } catch (e) {
             showToast('실수거완료 처리 실패: ' + e.message, 'error');
             if (btnEl) { btnEl.disabled = false; btnEl.textContent = '실수거완료'; }
+        }
+    }
+
+    async function copyToStore(productOrderId, btnEl) {
+        if (btnEl) { btnEl.disabled = true; btnEl.textContent = '처리 중...'; }
+        try {
+            await api('/api/returns/copy-to-store', {
+                method: 'POST',
+                body: JSON.stringify({ productOrderId })
+            });
+            // 버튼을 완료 라벨로 교체
+            if (btnEl) {
+                const tag = document.createElement('span');
+                tag.className = 'return-done-tag';
+                tag.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>스토어';
+                btnEl.replaceWith(tag);
+            }
+            showToast('B스토어에 등록되었습니다.', 'success');
+            // 양쪽 버튼 다 완료인지 체크 → 추가완료로 변환
+            checkBothDone(productOrderId);
+        } catch (e) {
+            showToast('스토어 등록 실패: ' + e.message, 'error');
+            if (btnEl) { btnEl.disabled = false; btnEl.textContent = '스토어 추가'; }
+        }
+    }
+
+    function checkBothDone(productOrderId) {
+        const rows = document.querySelectorAll(`.return-item-row[data-order-id="${productOrderId}"]`);
+        for (const row of rows) {
+            const group = row.querySelector('.return-btn-group');
+            if (!group) continue;
+            const hasBtn = group.querySelector('button');
+            if (!hasBtn) {
+                // 버튼 없음 = 둘 다 완료
+                row.classList.add('return-item-added');
+                const label = document.createElement('span');
+                label.className = 'return-added-label';
+                label.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>추가완료';
+                group.replaceWith(label);
+            }
         }
     }
 
@@ -3658,13 +3722,22 @@
                     // 최근 반품 + 실수거완료 양쪽 섹션에서 갱신
                     const rows = document.querySelectorAll(`.return-item-row[data-order-id="${oid.trim()}"]`);
                     for (const row of rows) {
-                        row.classList.add('return-item-added');
-                        const btn = row.querySelector('.return-add-btn');
-                        if (btn) {
+                        // return-btn-group 안의 재고 추가 버튼 → 완료 태그로 변환
+                        const addBtn = row.querySelector('.return-add-btn');
+                        const btnGroup = row.querySelector('.return-btn-group');
+                        if (addBtn && btnGroup) {
+                            const tag = document.createElement('span');
+                            tag.className = 'return-done-tag';
+                            tag.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>재고';
+                            addBtn.replaceWith(tag);
+                            checkBothDone(oid.trim());
+                        } else if (addBtn) {
+                            // 실수거완료 리스트 등 단독 버튼
+                            row.classList.add('return-item-added');
                             const label = document.createElement('span');
                             label.className = 'return-added-label';
                             label.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>추가완료';
-                            btn.replaceWith(label);
+                            addBtn.replaceWith(label);
                         }
                         // 실수거완료됨 라벨도 추가완료로 변경
                         const confirmLabel = row.querySelector('.return-confirmed-label');

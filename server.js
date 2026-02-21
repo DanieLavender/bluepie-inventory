@@ -669,15 +669,19 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       console.error(`[Returnable] 쿠팡 조회 실패:`, coupangErr.message);
     }
 
-    // === processedIds 조회 (네이버 + 쿠팡 통합) — 재고 반영 OR B스토어 복사 완료 건 ===
-    let processedIds = new Set();
+    // === 처리 상태 조회 (재고 반영 / B스토어 복사 분리) ===
+    let inventoryIds = new Set();
+    let storeIds = new Set();
     if (allProductOrderIds.length > 0) {
       const placeholders = allProductOrderIds.map(() => '?').join(',');
       const logRows = await query(
-        `SELECT DISTINCT product_order_id FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
+        `SELECT product_order_id, type FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
         allProductOrderIds
       );
-      processedIds = new Set(logRows.map(r => r.product_order_id));
+      for (const row of logRows) {
+        if (row.type === 'inventory_update') inventoryIds.add(row.product_order_id);
+        if (row.type === 'qty_increase' || row.type === 'product_create') storeIds.add(row.product_order_id);
+      }
     }
 
     // === confirmedPickup 조회 (return_confirmations) ===
@@ -691,13 +695,18 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       confirmedIds = new Set(confirmRows.map(r => r.product_order_id));
     }
 
-    // alreadyAdded + confirmedPickup 플래그 설정
+    // 플래그 설정
     for (const item of items) {
-      item.alreadyAdded = processedIds.has(item.productOrderId);
+      item.inventoryAdded = inventoryIds.has(item.productOrderId);
+      item.storeAdded = storeIds.has(item.productOrderId);
+      // 쿠팡은 B스토어 복사 불필요 → 재고만으로 완료 판정
+      item.alreadyAdded = item.store === 'C'
+        ? item.inventoryAdded
+        : (item.inventoryAdded && item.storeAdded);
       item.confirmedPickup = confirmedIds.has(item.productOrderId);
     }
 
-    console.log(`[Returnable] 최종: ${items.length}건 (등록됨 ${processedIds.size}, 실수거완료 ${confirmedIds.size})`);
+    console.log(`[Returnable] 최종: ${items.length}건 (재고 ${inventoryIds.size}, 스토어 ${storeIds.size}, 실수거완료 ${confirmedIds.size})`);
     res.json(items);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1186,25 +1195,92 @@ app.get('/api/returns/confirmed', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM return_confirmations ORDER BY confirmed_at DESC');
 
-    // sync_log에서 처리 완료 여부 확인 (재고반영/B스토어 복사 포함)
-    let processedIds = new Set();
+    // sync_log에서 처리 완료 여부 확인 (재고/스토어 분리)
+    let inventoryIds = new Set();
+    let storeIds = new Set();
     if (rows.length > 0) {
       const allIds = rows.map(r => r.product_order_id);
       const placeholders = allIds.map(() => '?').join(',');
       const logRows = await query(
-        `SELECT DISTINCT product_order_id FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
+        `SELECT product_order_id, type FROM sync_log WHERE type IN ('inventory_update', 'qty_increase', 'product_create') AND status = 'success' AND product_order_id IN (${placeholders})`,
         allIds
       );
-      processedIds = new Set(logRows.map(r => r.product_order_id));
+      for (const row of logRows) {
+        if (row.type === 'inventory_update') inventoryIds.add(row.product_order_id);
+        if (row.type === 'qty_increase' || row.type === 'product_create') storeIds.add(row.product_order_id);
+      }
     }
 
     const items = rows.map(r => ({
       ...r,
-      alreadyAdded: processedIds.has(r.product_order_id),
+      inventoryAdded: inventoryIds.has(r.product_order_id),
+      storeAdded: storeIds.has(r.product_order_id),
+      alreadyAdded: inventoryIds.has(r.product_order_id),
     }));
 
     res.json(items);
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/returns/copy-to-store - 수동 B스토어 복사
+app.post('/api/returns/copy-to-store', async (req, res) => {
+  try {
+    await initSyncClients();
+    const { productOrderId } = req.body;
+    if (!productOrderId) {
+      return res.status(400).json({ error: 'productOrderId가 필요합니다.' });
+    }
+
+    // 중복 체크
+    const dupCheck = await query(
+      "SELECT id FROM sync_log WHERE type IN ('qty_increase', 'product_create') AND status = 'success' AND product_order_id = ? LIMIT 1",
+      [productOrderId]
+    );
+    if (dupCheck.length > 0) {
+      return res.status(400).json({ error: '이미 스토어에 등록된 건입니다.' });
+    }
+
+    // 네이버 상품 상세 조회
+    const details = await scheduler.storeA.getProductOrderDetail([productOrderId]);
+    if (!details || details.length === 0) {
+      return res.status(404).json({ error: '주문 정보를 찾을 수 없습니다.' });
+    }
+
+    const detail = details[0];
+    const runId = 'manual-store-' + Date.now();
+    const productName = scheduler.extractProductName(detail);
+    const optionName = scheduler.extractOptionName(detail);
+    const qty = scheduler.extractQty(detail);
+    const channelProductNo = scheduler.extractChannelProductNo(detail);
+
+    // product_mapping 확인 → B스토어 복사
+    const safeOptionName = optionName || '';
+    const mappingRows = await query(
+      'SELECT * FROM product_mapping WHERE store_a_channel_product_no = ? AND store_a_option_name = ?',
+      [channelProductNo, safeOptionName]
+    );
+    const mapping = mappingRows[0];
+
+    if (mapping && mapping.match_status !== 'unmatched' && mapping.store_b_channel_product_no) {
+      try {
+        await scheduler.increaseStoreB(runId, mapping.store_b_channel_product_no, productName, optionName, qty, productOrderId);
+      } catch (e) {
+        const isNotFound = e.message && (e.message.includes('404') || e.message.includes('not found'));
+        if (isNotFound) {
+          await scheduler.copyAndCreateInStoreB(runId, detail, channelProductNo, productName, optionName, qty, productOrderId);
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      await scheduler.copyAndCreateInStoreB(runId, detail, channelProductNo, productName, optionName, qty, productOrderId);
+    }
+
+    res.json({ success: true, message: 'B스토어에 등록되었습니다.' });
+  } catch (e) {
+    console.error('[CopyToStore] 오류:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
