@@ -628,7 +628,12 @@
             backdrop-filter: blur(2px);
         }
         .modal-overlay.active { display: flex; }
-        body.modal-open { overflow: hidden; }
+        body.modal-open {
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            left: 0;
+        }
         .modal {
             background: var(--bg-card);
             border-radius: var(--radius-lg);
@@ -1943,11 +1948,11 @@
         editTargetId = id;
         document.getElementById('editName').value = name;
         document.getElementById('editModal').classList.add('active');
-        document.body.classList.add('modal-open');
+        lockBodyScroll();
     }
     function closeEditModal() {
         document.getElementById('editModal').classList.remove('active');
-        document.body.classList.remove('modal-open');
+        unlockBodyScroll();
         editTargetId = null;
     }
     async function submitEdit() {
@@ -2382,6 +2387,19 @@
         }
     }
 
+    // ===== Modal scroll lock =====
+    let _modalScrollY = 0;
+    function lockBodyScroll() {
+        _modalScrollY = window.scrollY;
+        document.body.style.top = `-${_modalScrollY}px`;
+        document.body.classList.add('modal-open');
+    }
+    function unlockBodyScroll() {
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        window.scrollTo(0, _modalScrollY);
+    }
+
     // ===== Add Item =====
     function openAddModal() {
         const select = document.getElementById('inputBrand');
@@ -2412,7 +2430,7 @@
         document.getElementById('naverFetchBtn').disabled = false;
         document.getElementById('naverFetchBtn').innerHTML = '<span>&#128230;</span> 네이버 반품/수거 불러오기';
         document.getElementById('addModal').classList.add('active');
-        document.body.classList.add('modal-open');
+        lockBodyScroll();
     }
 
     function toggleCustomBrand() {
@@ -2426,7 +2444,7 @@
 
     function closeAddModal() {
         document.getElementById('addModal').classList.remove('active');
-        document.body.classList.remove('modal-open');
+        unlockBodyScroll();
     }
 
     async function fetchNaverReturns() {
@@ -2435,9 +2453,9 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spin" style="display:inline-block;animation:spin 1s linear infinite">&#9881;</span> 불러오는 중...';
         try {
-            const items = await api('/api/sync/returnable-items?hours=72');
+            const items = await api('/api/sync/returnable-items?hours=168');
             if (!items || items.length === 0) {
-                list.innerHTML = '<div class="naver-return-empty">최근 72시간 내 등록 가능한 반품/수거 건이 없습니다.</div>';
+                list.innerHTML = '<div class="naver-return-empty">최근 7일 내 반품/수거 완료 건이 없습니다.</div>';
                 list.classList.add('active');
                 btn.innerHTML = '<span>&#128230;</span> 다시 불러오기';
                 btn.disabled = false;
@@ -2579,7 +2597,7 @@
         pendingDeleteIds = [id];
         document.getElementById('confirmMsg').textContent = `"${name} (${color})" 을(를) 삭제하시겠습니까?`;
         document.getElementById('confirmModal').classList.add('active');
-        document.body.classList.add('modal-open');
+        lockBodyScroll();
     }
 
     function deleteSelected() {
@@ -2587,12 +2605,12 @@
         pendingDeleteIds = [...selectedIds];
         document.getElementById('confirmMsg').textContent = `선택한 ${pendingDeleteIds.length}개 항목을 삭제하시겠습니까?`;
         document.getElementById('confirmModal').classList.add('active');
-        document.body.classList.add('modal-open');
+        lockBodyScroll();
     }
 
     function closeConfirm() {
         document.getElementById('confirmModal').classList.remove('active');
-        document.body.classList.remove('modal-open');
+        unlockBodyScroll();
         pendingDeleteIds = [];
     }
 

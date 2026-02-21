@@ -606,9 +606,20 @@ class NaverCommerceClient {
       );
     });
 
-    console.log(`[${this.storeName}] 반품/수거: 전체 ${allStatuses.length}건 중 ${returnStatuses.length}건 필터됨`);
+    // 클레임 관련 건 분포 로깅
+    const claimItems = allStatuses.filter(s => s.claimType);
+    if (claimItems.length > 0) {
+      const dist = {};
+      claimItems.forEach(s => {
+        const key = `${s.claimType}/${s.claimStatus}`;
+        dist[key] = (dist[key] || 0) + 1;
+      });
+      console.log(`[${this.storeName}] 클레임 분포:`, JSON.stringify(dist));
+    }
+
+    console.log(`[${this.storeName}] 반품/수거: 전체 ${allStatuses.length}건, 클레임 ${claimItems.length}건, 필터 ${returnStatuses.length}건`);
     returnStatuses.forEach(s => {
-      console.log(`  - claimStatus=${s.claimStatus} orderStatus=${s.productOrderStatus} id=${s.productOrderId}`);
+      console.log(`  - claimType=${s.claimType} claimStatus=${s.claimStatus} orderStatus=${s.productOrderStatus} id=${s.productOrderId}`);
     });
 
     // productOrderId 중복 제거
