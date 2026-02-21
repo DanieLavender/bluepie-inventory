@@ -1413,12 +1413,20 @@ function parseCoupangItemName(vendorItemName) {
     return { productName: vendorItemName.trim(), brand: extractBrand(vendorItemName), color: '', size: '' };
   }
 
-  const productName = vendorItemName.slice(0, commaIdx).trim();
+  let productName = vendorItemName.slice(0, commaIdx).trim();
   const optionPart = vendorItemName.slice(commaIdx + 1).trim();
   const tokens = optionPart.split(/\s+/).filter(t => t);
 
-  // 브랜드: 상품명에서 추출 (이미 포함되어 있음)
+  // 브랜드: 상품명 앞 또는 끝에서 2글자 영문 이니셜 추출
   let brand = extractBrand(productName);
+  if (!brand) {
+    // 끝에 브랜드가 있는 경우: "... 블랙 ob" → brand = "ob"
+    const endMatch = productName.match(/\s([a-zA-Z]{2})$/);
+    if (endMatch) {
+      brand = endMatch[1].toLowerCase();
+      productName = productName.slice(0, -endMatch[1].length).trim();
+    }
+  }
 
   // 첫 토큰이 2글자 영문이면 옵션 쪽 브랜드 — 상품명에 없으면 prepend용
   let startIdx = 0;
