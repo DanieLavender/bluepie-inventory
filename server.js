@@ -587,6 +587,7 @@ app.get('/api/sync/returnable-items', async (req, res) => {
     try {
       const coupangClient = await initCoupangClient();
       if (coupangClient) {
+        console.log(`[Returnable] 쿠팡 클라이언트 초기화 성공, 반품 조회 시작...`);
         const coupangReturns = await coupangClient.getReturnRequests(from.toISOString(), now.toISOString());
         console.log(`[Returnable] 쿠팡: ${coupangReturns.length}건 감지`);
 
@@ -612,9 +613,11 @@ app.get('/api/sync/returnable-items', async (req, res) => {
             });
           }
         }
+      } else {
+        console.log(`[Returnable] 쿠팡 클라이언트 미설정 (API 키 없음)`);
       }
     } catch (coupangErr) {
-      console.log(`[Returnable] 쿠팡 조회 실패 (무시):`, coupangErr.message);
+      console.error(`[Returnable] 쿠팡 조회 실패:`, coupangErr.message);
     }
 
     // === processedIds 조회 (네이버 + 쿠팡 통합) ===
@@ -1045,6 +1048,43 @@ app.post('/api/coupang/test-connection', async (req, res) => {
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/coupang/debug-returns - 쿠팡 반품 API 원본 응답 확인
+app.get('/api/coupang/debug-returns', async (req, res) => {
+  try {
+    const coupangClient = await initCoupangClient();
+    if (!coupangClient) {
+      return res.json({ error: '쿠팡 API 키 미설정', keys: { accessKey: !!process.env.COUPANG_ACCESS_KEY, secretKey: !!process.env.COUPANG_SECRET_KEY, vendorId: !!process.env.COUPANG_VENDOR_ID } });
+    }
+
+    const hours = parseInt(req.query.hours) || 168;
+    const now = new Date();
+    const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
+    const fromStr = coupangClient.formatCoupangDate(from.toISOString());
+    const toStr = coupangClient.formatCoupangDate(now.toISOString());
+
+    const params = new URLSearchParams({
+      createdAtFrom: fromStr,
+      createdAtTo: toStr,
+      maxPerPage: '50',
+    });
+    const basePath = `/v2/providers/openapi/apis/api/v4/vendors/${coupangClient.vendorId}/returnRequests`;
+    const fullPath = `${basePath}?${params.toString()}`;
+
+    console.log(`[Coupang Debug] 반품 조회: ${fullPath}`);
+    console.log(`[Coupang Debug] 기간: ${fromStr} ~ ${toStr}`);
+
+    const rawResponse = await coupangClient.apiCall('GET', fullPath);
+    res.json({
+      requestPath: fullPath,
+      dateRange: { from: fromStr, to: toStr },
+      responseKeys: rawResponse ? Object.keys(rawResponse) : null,
+      rawResponse,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stack: e.stack?.split('\n').slice(0, 5) });
   }
 });
 
