@@ -620,9 +620,10 @@ app.get('/api/sync/returnable-items', async (req, res) => {
         console.log(`[Returnable] 쿠팡: ${coupangReturns.length}건 감지`);
 
         for (const ret of coupangReturns) {
-          // 상태 매핑: 쿠팡 반품완료(RF/RETURNS_COMPLETED)는 수거완료 단계 → COLLECT_DONE
+          // 상태 매핑: 쿠팡 receiptStatus → 네이버 claimStatus 호환
           const statusMap = {
-            'RF': 'COLLECT_DONE', 'RETURNS_COMPLETED': 'COLLECT_DONE',
+            'RF': 'RETURN_DONE', 'RETURNS_COMPLETED': 'RETURN_DONE',
+            'WC': 'COLLECT_DONE', 'VENDOR_WAREHOUSE_CONFIRM': 'COLLECT_DONE',
             'CC': 'COLLECT_DONE', 'UNIT_COLLECTED': 'COLLECT_DONE',
             'UC': 'COLLECTING',
           };
