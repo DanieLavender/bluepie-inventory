@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const webpush = require('web-push');
 const { NaverCommerceClient } = require('./smartstore');
 const { CoupangClient } = require('./coupang');
+const { ZigzagClient } = require('./zigzag');
 const { query } = require('./database');
 
 class SyncScheduler {
@@ -798,6 +799,46 @@ class SyncScheduler {
       console.error('[Sales] Coupang 수집 오류:', e.message);
       await this.logSync(logRunId, 'sales_collect', 'C', null, null, null,
         '쿠팡 매출 수집', null, 0, 'fail', e.message).catch(() => {});
+    }
+
+    // === 지그재그 자동 수집 ===
+    try {
+      const zAccessKey = process.env.ZIGZAG_ACCESS_KEY || await getVal('zigzag_access_key');
+      const zSecretKey = process.env.ZIGZAG_SECRET_KEY || await getVal('zigzag_secret_key');
+
+      if (zAccessKey && zSecretKey) {
+        const zigzag = new ZigzagClient(zAccessKey, zSecretKey);
+        const configKey = 'sales_last_fetch_d';
+        const lastFetch = await this.getConfig(configKey);
+        const now = new Date();
+        const from = lastFetch ? new Date(lastFetch) : new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        let inserted = 0;
+        const items = await zigzag.getOrderItems(from.toISOString(), now.toISOString());
+        for (const item of items) {
+          try {
+            const insertResult = await query(
+              `INSERT IGNORE INTO sales_orders (store, product_order_id, order_date, product_name, option_name, qty, unit_price, total_amount, product_order_status, channel_product_no)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              ['D', item.productOrderId, item.orderDate, item.productName, item.optionName,
+               item.qty, item.unitPrice, item.totalAmount, item.status, item.channelProductNo]
+            );
+            if (insertResult.affectedRows > 0) inserted++;
+          } catch (dbErr) { }
+        }
+
+        await this.setConfig(configKey, now.toISOString());
+        if (inserted > 0) {
+          totalNewOrders += inserted;
+          console.log(`[Sales] Zigzag 자동 수집: ${inserted}건`);
+          await this.logSync(logRunId, 'sales_collect', 'D', null, null, null,
+            '지그재그 매출 수집', null, inserted, 'success', `지그재그 신규 주문 ${inserted}건 수집`);
+        }
+      }
+    } catch (e) {
+      console.error('[Sales] Zigzag 수집 오류:', e.message);
+      await this.logSync(logRunId, 'sales_collect', 'D', null, null, null,
+        '지그재그 매출 수집', null, 0, 'fail', e.message).catch(() => {});
     }
 
     // 신규 매출 푸시 알림

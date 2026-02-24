@@ -485,6 +485,7 @@
         .store-badge { display:inline-block; font-size:9px; padding:1px 4px; border-radius:3px; color:white; margin-right:4px; font-weight:700; vertical-align:middle; }
         .store-coupang { background:#E44D2E; }
         .store-naver { background:#03C75A; }
+        .store-zigzag { background:#6B21A8; }
 
         /* ===== 실수거완료 버튼/라벨 ===== */
         .return-confirm-btn {
@@ -2038,6 +2039,22 @@
                             </div>
                         </div>
 
+                        <!-- Zigzag -->
+                        <div style="margin-bottom:16px;padding:14px;background:var(--bg-primary);border-radius:var(--radius-sm);">
+                            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">지그재그 (매출 수집)</div>
+                            <div class="setting-row">
+                                <label>Access Key</label>
+                                <input type="text" id="zigzagAccessKey" placeholder="Access Key 입력">
+                            </div>
+                            <div class="setting-row">
+                                <label>Secret Key</label>
+                                <input type="password" id="zigzagSecretKey" placeholder="Secret Key 입력">
+                            </div>
+                            <div style="text-align:right;margin-top:8px;">
+                                <button class="btn btn-outline btn-sm" onclick="testZigzagConnection()">연결 테스트</button>
+                            </div>
+                        </div>
+
                         <!-- 푸시 알림 -->
                         <div style="margin-bottom:16px;padding:14px;background:var(--bg-primary);border-radius:var(--radius-sm);">
                             <div style="font-size:13px;font-weight:600;margin-bottom:10px;">푸시 알림</div>
@@ -3226,6 +3243,8 @@
         // 스토어 배지
         const storeBadge = item.store === 'C'
             ? '<span class="store-badge store-coupang">쿠팡</span>'
+            : item.store === 'D'
+            ? '<span class="store-badge store-zigzag">지그재그</span>'
             : '<span class="store-badge store-naver">네이버</span>';
 
         // 브랜드 추출
@@ -3342,8 +3361,8 @@
             for (const item of items) {
                 // 실수거완료된 건은 별도 그룹
                 const st = item.confirmedPickup ? 'PICKUP_CONFIRMED' : (item.claimStatus || '기타');
-                // 반품접수(COLLECTING)는 쿠팡만 표시
-                if (st === 'COLLECTING' && item.store !== 'C') continue;
+                // 반품접수(COLLECTING)는 쿠팡/지그재그만 표시
+                if (st === 'COLLECTING' && item.store !== 'C' && item.store !== 'D') continue;
                 if (!groups[st]) groups[st] = [];
                 groups[st].push(item);
             }
@@ -3932,6 +3951,9 @@
             document.getElementById('coupangAccessKey').placeholder = config.coupang_access_key || 'Access Key 입력';
             document.getElementById('coupangVendorId').value = config.coupang_vendor_id || '';
             if (config.coupang_access_key) document.getElementById('coupangAccessKey').value = '';
+            // 지그재그
+            document.getElementById('zigzagAccessKey').placeholder = config.zigzag_access_key || 'Access Key 입력';
+            if (config.zigzag_access_key) document.getElementById('zigzagAccessKey').value = '';
 
             // 푸시 알림 상태 확인
             updatePushStatus();
@@ -3993,6 +4015,11 @@
         if (cAccessKey) body.coupang_access_key = cAccessKey;
         if (cSecretKey) body.coupang_secret_key = cSecretKey;
         if (cVendorId) body.coupang_vendor_id = cVendorId;
+        // 지그재그
+        const zAccessKey = document.getElementById('zigzagAccessKey').value.trim();
+        const zSecretKey = document.getElementById('zigzagSecretKey').value.trim();
+        if (zAccessKey) body.zigzag_access_key = zAccessKey;
+        if (zSecretKey) body.zigzag_secret_key = zSecretKey;
 
         try {
             await api('/api/sync/save-keys', {
@@ -4051,6 +4078,29 @@
                 showToast('쿠팡 연결 성공!', 'success');
             } else {
                 showToast('쿠팡 연결 실패: ' + result.message, 'error');
+            }
+        } catch (e) {
+            showToast('연결 테스트 실패: ' + e.message, 'error');
+        }
+    }
+
+    async function testZigzagConnection() {
+        const accessKey = document.getElementById('zigzagAccessKey').value.trim();
+        const secretKey = document.getElementById('zigzagSecretKey').value.trim();
+        if (!accessKey || !secretKey) {
+            showToast('Access Key, Secret Key를 모두 입력해주세요.', 'error');
+            return;
+        }
+        try {
+            showToast('지그재그 연결 테스트 중...', 'info');
+            const result = await api('/api/zigzag/test-connection', {
+                method: 'POST',
+                body: JSON.stringify({ accessKey, secretKey })
+            });
+            if (result.success) {
+                showToast('지그재그 연결 성공!', 'success');
+            } else {
+                showToast('지그재그 연결 실패: ' + result.message, 'error');
             }
         } catch (e) {
             showToast('연결 테스트 실패: ' + e.message, 'error');
@@ -4392,6 +4442,8 @@
                 const statusBadge = isCanceled ? ' <span style="font-size:11px;color:#ef4444">취소</span>' : '';
                 const channelBadge = row.store === 'C'
                     ? '<span style="font-size:11px;background:#f43f5e;color:white;padding:1px 6px;border-radius:3px">쿠팡</span>'
+                    : row.store === 'D'
+                    ? '<span style="font-size:11px;background:#6B21A8;color:white;padding:1px 6px;border-radius:3px">지그재그</span>'
                     : row.store === 'B'
                     ? '<span style="font-size:11px;background:#2563eb;color:white;padding:1px 6px;border-radius:3px">네이버B</span>'
                     : '<span style="font-size:11px;background:#16a34a;color:white;padding:1px 6px;border-radius:3px">네이버A</span>';

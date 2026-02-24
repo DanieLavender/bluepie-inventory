@@ -194,6 +194,9 @@ async function initDb() {
     ['coupang_access_key', ''],
     ['coupang_secret_key', ''],
     ['coupang_vendor_id', ''],
+    ['sales_last_fetch_d', ''],
+    ['zigzag_access_key', ''],
+    ['zigzag_secret_key', ''],
     ['vapid_public_key', ''],
     ['vapid_private_key', ''],
   ];

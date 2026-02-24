@@ -5,6 +5,7 @@ const { getPool, initDb, query } = require('./database');
 const { scheduler } = require('./sync-scheduler');
 const { NaverCommerceClient } = require('./smartstore');
 const { CoupangClient } = require('./coupang');
+const { ZigzagClient } = require('./zigzag');
 const webpush = require('web-push');
 
 const app = express();
@@ -139,8 +140,8 @@ app.post('/api/inventory', async (req, res) => {
       try {
         const orderIdList = productOrderId.includes(',') ? productOrderId.split(',') : [productOrderId];
         for (const oid of orderIdList) {
-          const storeFrom = oid.trim().startsWith('CPG_') ? 'C' : 'A';
-          const storeLabel = storeFrom === 'C' ? '쿠팡' : '네이버';
+          const storeFrom = oid.trim().startsWith('CPG_') ? 'C' : oid.trim().startsWith('ZZG_') ? 'D' : 'A';
+          const storeLabel = storeFrom === 'C' ? '쿠팡' : storeFrom === 'D' ? '지그재그' : '네이버';
           await query(
             `INSERT INTO sync_log (run_id, type, store_from, store_to, product_order_id, channel_product_no, product_name, product_option, qty, status, message)
              VALUES ('manual', 'inventory_update', ?, NULL, ?, ?, ?, ?, ?, 'success', ?)`,
@@ -258,7 +259,7 @@ app.get('/api/sales/stats', async (req, res) => {
 
     // 마지막 수집 시간 조회
     const fetchTimes = await query(
-      "SELECT `key`, value FROM sync_config WHERE `key` IN ('sales_last_fetch_a', 'sales_last_fetch_b', 'sales_last_fetch_c')"
+      "SELECT `key`, value FROM sync_config WHERE `key` IN ('sales_last_fetch_a', 'sales_last_fetch_b', 'sales_last_fetch_c', 'sales_last_fetch_d')"
     );
     let lastFetchTime = null;
     for (const row of fetchTimes) {
@@ -364,6 +365,8 @@ app.post('/api/sales/fetch', async (req, res) => {
 
     // 쿠팡 클라이언트 초기화
     const coupangClient = await initCoupangClient();
+    // 지그재그 클라이언트 초기화
+    const zigzagClient = await initZigzagClient();
 
     // 리셋 요청 시 기존 데이터 삭제 + last_fetch 초기화
     if (resetDays) {
@@ -373,6 +376,7 @@ app.post('/api/sales/fetch', async (req, res) => {
         await scheduler.setConfig(s.configKey, resetTime);
       }
       if (coupangClient) await scheduler.setConfig('sales_last_fetch_c', resetTime);
+      if (zigzagClient) await scheduler.setConfig('sales_last_fetch_d', resetTime);
       console.log(`[Sales] 전체 리셋: 기존 데이터 삭제 + ${resetDays}일 전부터 재수집`);
     }
 
@@ -507,6 +511,45 @@ app.post('/api/sales/fetch', async (req, res) => {
       }
     }
 
+    // === 지그재그 수집 ===
+    if (zigzagClient) {
+      try {
+        const configKey = 'sales_last_fetch_d';
+        const lastFetch = await scheduler.getConfig(configKey);
+        const now = new Date();
+        const from = (lastFetch && lastFetch.length > 0) ? new Date(lastFetch) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        console.log(`[Sales] Zigzag 수집 시작: ${from.toISOString()} ~ ${now.toISOString()}`);
+        let storeInserted = 0;
+        let storeFound = 0;
+
+        const items = await zigzagClient.getOrderItems(from.toISOString(), now.toISOString());
+        storeFound = items.length;
+        for (const item of items) {
+          try {
+            const insertResult = await query(
+              `INSERT IGNORE INTO sales_orders (store, product_order_id, order_date, product_name, option_name, qty, unit_price, total_amount, product_order_status, channel_product_no)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              ['D', item.productOrderId, item.orderDate, item.productName, item.optionName,
+               item.qty, item.unitPrice, item.totalAmount, item.status, item.channelProductNo]
+            );
+            if (insertResult.affectedRows > 0) storeInserted++;
+          } catch (dbErr) { }
+        }
+
+        if (!errors.some(e => e.startsWith('Zigzag'))) {
+          await scheduler.setConfig(configKey, now.toISOString());
+        }
+        storeResults.push({ store: '지그재그', found: storeFound, inserted: storeInserted });
+        totalInserted += storeInserted;
+        totalFound += storeFound;
+        console.log(`[Sales] Zigzag 수집 완료: 발견 ${storeFound}건, 신규 ${storeInserted}건`);
+      } catch (e) {
+        errors.push(`Zigzag: ${e.message}`);
+        console.error('[Sales] Zigzag 오류:', e.message);
+      }
+    }
+
     // 신규 매출 푸시 알림
     if (totalInserted > 0) {
       try {
@@ -523,7 +566,7 @@ app.post('/api/sales/fetch', async (req, res) => {
         try {
           await query(
             `INSERT INTO sync_log (run_id, type, store_from, product_name, qty, status, message) VALUES (?, 'sales_collect', ?, ?, ?, 'success', ?)`,
-            [salesRunId, d.store === '쿠팡' ? 'C' : d.store.includes('A') ? 'A' : 'B', `${d.store} 매출 수집`, d.inserted, `${d.store} 신규 주문 ${d.inserted}건 수집`]
+            [salesRunId, d.store === '쿠팡' ? 'C' : d.store === '지그재그' ? 'D' : d.store.includes('A') ? 'A' : 'B', `${d.store} 매출 수집`, d.inserted, `${d.store} 신규 주문 ${d.inserted}건 수집`]
           );
         } catch (logErr) {
           console.log('[Sales] sync_log 기록 실패:', logErr.message);
@@ -548,7 +591,7 @@ app.post('/api/sales/fetch', async (req, res) => {
 
 // --- Sync API Routes ---
 
-// GET /api/sync/returnable-items - 네이버+쿠팡 반품/수거 완료 건 목록 (이미 등록된 건도 표시)
+// GET /api/sync/returnable-items - 네이버+쿠팡+지그재그 반품/수거 완료 건 목록 (이미 등록된 건도 표시)
 app.get('/api/sync/returnable-items', async (req, res) => {
   try {
     await initSyncClients();
@@ -702,6 +745,51 @@ app.get('/api/sync/returnable-items', async (req, res) => {
       console.error(`[Returnable] 쿠팡 조회 실패:`, coupangErr.message);
     }
 
+    // === 지그재그 반품 조회 ===
+    try {
+      const zigzagClient = await initZigzagClient();
+      if (zigzagClient) {
+        const zigzagFrom = new Date(now.getTime() - hours * 2 * 60 * 60 * 1000);
+        console.log(`[Returnable] 지그재그 반품 조회 시작 (${Math.round(hours*2/24)}일)...`);
+        const zigzagReturns = await zigzagClient.getReturnRequests(zigzagFrom.toISOString(), now.toISOString());
+        console.log(`[Returnable] 지그재그: ${zigzagReturns.length}건 감지`);
+
+        for (const ret of zigzagReturns) {
+          const statusMap = {
+            'RETURN_REQUESTED': 'COLLECTING',
+            'RETURN_COLLECTING': 'COLLECTING',
+            'RETURNED': 'COLLECT_DONE',
+          };
+          const claimStatus = statusMap[ret.receiptStatus] || 'COLLECTING';
+
+          for (const ri of ret.returnItems) {
+            const productOrderId = `ZZG_RET_${ret.receiptId}_${ri.vendorItemId}`;
+            allProductOrderIds.push(productOrderId);
+
+            // 옵션 파싱
+            const optionName = ri.sellerProductItemName || null;
+
+            items.push({
+              store: 'D',
+              productOrderId,
+              productName: ri.vendorItemName || '',
+              optionName,
+              qty: ri.returnQuantity || 1,
+              channelProductNo: ri.vendorItemId,
+              claimStatus,
+              claimType: 'RETURN',
+              lastChangedDate: ret.createdAt || null,
+              ordererName: ret.buyerName || '',
+            });
+          }
+        }
+      } else {
+        console.log(`[Returnable] 지그재그 클라이언트 미설정 (API 키 없음)`);
+      }
+    } catch (zigzagErr) {
+      console.error(`[Returnable] 지그재그 조회 실패:`, zigzagErr.message);
+    }
+
     // === 처리 상태 조회 (재고 반영 / B스토어 복사 분리) ===
     let inventoryIds = new Set();
     let storeIds = new Set();
@@ -732,8 +820,8 @@ app.get('/api/sync/returnable-items', async (req, res) => {
     for (const item of items) {
       item.inventoryAdded = inventoryIds.has(item.productOrderId);
       item.storeAdded = storeIds.has(item.productOrderId);
-      // 쿠팡은 B스토어 복사 불필요 → 재고만으로 완료 판정
-      item.alreadyAdded = item.store === 'C'
+      // 쿠팡/지그재그는 B스토어 복사 불필요 → 재고만으로 완료 판정
+      item.alreadyAdded = (item.store === 'C' || item.store === 'D')
         ? item.inventoryAdded
         : (item.inventoryAdded && item.storeAdded);
       item.confirmedPickup = confirmedIds.has(item.productOrderId);
@@ -1009,6 +1097,11 @@ app.get('/api/sync/config', async (req, res) => {
     config.coupang_access_key = cAccessKey ? maskSecret(cAccessKey) : '';
     config.coupang_secret_key = cSecretKey ? '****' : '';
     config.coupang_vendor_id = cVendorId || '';
+    // 지그재그
+    const zAccessKey = process.env.ZIGZAG_ACCESS_KEY || config.zigzag_access_key || '';
+    const zSecretKey = process.env.ZIGZAG_SECRET_KEY || config.zigzag_secret_key || '';
+    config.zigzag_access_key = zAccessKey ? maskSecret(zAccessKey) : '';
+    config.zigzag_secret_key = zSecretKey ? '****' : '';
     res.json(config);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1115,7 +1208,8 @@ app.post('/api/sync/save-keys', async (req, res) => {
     const { store_a_client_id, store_a_client_secret, store_b_client_id, store_b_client_secret,
             store_b_display_status, store_b_sale_status, store_b_name_prefix,
             sync_interval_minutes,
-            coupang_access_key, coupang_secret_key, coupang_vendor_id } = req.body;
+            coupang_access_key, coupang_secret_key, coupang_vendor_id,
+            zigzag_access_key, zigzag_secret_key } = req.body;
     const upsertSql = 'INSERT INTO sync_config (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()';
     if (store_a_client_id) await query(upsertSql, ['store_a_client_id', store_a_client_id]);
     if (store_a_client_secret) await query(upsertSql, ['store_a_client_secret', store_a_client_secret]);
@@ -1130,6 +1224,9 @@ app.post('/api/sync/save-keys', async (req, res) => {
     if (coupang_access_key) await query(upsertSql, ['coupang_access_key', coupang_access_key]);
     if (coupang_secret_key) await query(upsertSql, ['coupang_secret_key', coupang_secret_key]);
     if (coupang_vendor_id) await query(upsertSql, ['coupang_vendor_id', coupang_vendor_id]);
+    // 지그재그
+    if (zigzag_access_key) await query(upsertSql, ['zigzag_access_key', zigzag_access_key]);
+    if (zigzag_secret_key) await query(upsertSql, ['zigzag_secret_key', zigzag_secret_key]);
     scheduler.storeA = null;
     scheduler.storeB = null;
     res.json({ success: true });
@@ -1146,6 +1243,21 @@ app.post('/api/coupang/test-connection', async (req, res) => {
       return res.status(400).json({ error: 'Access Key, Secret Key, Vendor ID를 모두 입력해주세요.' });
     }
     const client = new CoupangClient(accessKey, secretKey, vendorId, 'Coupang-Test');
+    const result = await client.testConnection();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/zigzag/test-connection - 지그재그 연결 테스트
+app.post('/api/zigzag/test-connection', async (req, res) => {
+  try {
+    const { accessKey, secretKey } = req.body;
+    if (!accessKey || !secretKey) {
+      return res.status(400).json({ error: 'Access Key, Secret Key를 모두 입력해주세요.' });
+    }
+    const client = new ZigzagClient(accessKey, secretKey, 'Zigzag-Test');
     const result = await client.testConnection();
     res.json(result);
   } catch (e) {
@@ -1525,6 +1637,17 @@ async function initCoupangClient() {
   const vendorId = process.env.COUPANG_VENDOR_ID || await getVal('coupang_vendor_id');
   if (!accessKey || !secretKey || !vendorId) return null;
   return new CoupangClient(accessKey, secretKey, vendorId);
+}
+
+async function initZigzagClient() {
+  const getVal = async (key) => {
+    const rows = await query('SELECT value FROM sync_config WHERE `key` = ?', [key]);
+    return rows[0] ? rows[0].value : '';
+  };
+  const accessKey = process.env.ZIGZAG_ACCESS_KEY || await getVal('zigzag_access_key');
+  const secretKey = process.env.ZIGZAG_SECRET_KEY || await getVal('zigzag_secret_key');
+  if (!accessKey || !secretKey) return null;
+  return new ZigzagClient(accessKey, secretKey);
 }
 
 // Initialize DB and start server
