@@ -72,14 +72,23 @@ class ZigzagClient {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // ISO → YYYYMMDD (KST 기준)
+  // ISO → YYYYMMDD 정수 (KST 기준, 스키마 타입 Int)
   formatYmd(isoDate) {
     const d = new Date(isoDate);
     const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
     const y = kst.getUTCFullYear();
     const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
     const day = String(kst.getUTCDate()).padStart(2, '0');
-    return `${y}${m}${day}`;
+    return parseInt(`${y}${m}${day}`, 10);
+  }
+
+  // CrTimestamp (Unix timestamp) → Date 변환
+  parseTimestamp(ts) {
+    if (!ts) return null;
+    // 초 단위 vs 밀리초 단위 판별 (2000년 이전 = 초 단위)
+    const num = Number(ts);
+    if (num < 1e12) return new Date(num * 1000);
+    return new Date(num);
   }
 
   // === 주문(매출) 조회 ===
@@ -89,7 +98,7 @@ class ZigzagClient {
     const dateFrom = this.formatYmd(fromDate);
     const dateTo = this.formatYmd(toDate);
 
-    const query = `query($date_ymd_from: String, $date_ymd_to: String, $limit_count: Int, $skip_count: Int) {
+    const query = `query($date_ymd_from: Int, $date_ymd_to: Int, $limit_count: Int, $skip_count: Int) {
       order_item_list(date_ymd_from: $date_ymd_from, date_ymd_to: $date_ymd_to,
         limit_count: $limit_count, skip_count: $skip_count) {
         total_count
@@ -135,13 +144,13 @@ class ZigzagClient {
         const order = item.order || {};
         const orderNumber = order.order_number || '';
         const itemNumber = item.order_item_number || '';
-        const rawDate = order.date_paid || order.date_created || toDate;
+        const rawDate = order.date_paid || order.date_created;
         const qty = item.quantity || 1;
         const unitPrice = Number(item.unit_price) || 0;
 
         allItems.push({
           productOrderId: `ZZG_${orderNumber}_${itemNumber}`,
-          orderDate: new Date(rawDate),
+          orderDate: rawDate ? this.parseTimestamp(rawDate) : new Date(toDate),
           productName: item.product_name || '',
           optionName: item.option_name || null,
           qty,
@@ -168,7 +177,7 @@ class ZigzagClient {
     const dateFrom = this.formatYmd(fromDate);
     const dateTo = this.formatYmd(toDate);
 
-    const query = `query($date_requested_ymd_from: String, $date_requested_ymd_to: String,
+    const query = `query($date_requested_ymd_from: Int, $date_requested_ymd_to: Int,
       $request_type: OrderItemRequestType, $limit_count: Int, $skip_count: Int) {
       requested_order_item_list(date_requested_ymd_from: $date_requested_ymd_from,
         date_requested_ymd_to: $date_requested_ymd_to, request_type: $request_type,
@@ -240,7 +249,7 @@ class ZigzagClient {
             sellerProductItemName: item.option_name || '',
             _raw: item,
           }],
-          createdAt: primaryReq.date_requested || order.date_created || '',
+          createdAt: this.parseTimestamp(primaryReq.date_requested || order.date_created) || '',
         });
       }
 
