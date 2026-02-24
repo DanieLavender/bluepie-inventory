@@ -3271,11 +3271,12 @@
             countBadge.textContent = items.length;
             countBadge.style.display = '';
 
-            // 상태별 그룹핑 (수거완료/반품완료/실수거완료 3그룹)
+            // 상태별 그룹핑 (수거완료/입고완료/반품완료/실수거완료 4그룹)
             const groups = {};
-            const statusOrder = ['COLLECT_DONE', 'RETURN_DONE', 'PICKUP_CONFIRMED'];
+            const statusOrder = ['COLLECT_DONE', 'WAREHOUSE_CONFIRM', 'RETURN_DONE', 'PICKUP_CONFIRMED'];
             const statusLabels = {
                 'COLLECT_DONE': '수거완료',
+                'WAREHOUSE_CONFIRM': '입고완료',
                 'RETURN_DONE': '반품완료',
                 'PICKUP_CONFIRMED': '실수거완료'
             };
@@ -3321,7 +3322,7 @@
                         btnHtml = `<span class="return-confirmed-label" onclick="cancelConfirmPickup('${item.productOrderId}', this)" title="클릭하여 취소">실수거완료됨</span>`;
                     } else if (canConfirm) {
                         btnHtml = `<button class="return-confirm-btn" onclick="confirmPickup('${item.productOrderId}', this)">실수거완료</button>`;
-                    } else if (st === 'RETURN_DONE') {
+                    } else if (st === 'RETURN_DONE' || st === 'WAREHOUSE_CONFIRM') {
                         // 반품완료: 스토어 추가 + 재고 추가 분리
                         const sDone = item.storeAdded;
                         const iDone = item.inventoryAdded;

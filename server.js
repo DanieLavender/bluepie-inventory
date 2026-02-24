@@ -622,8 +622,10 @@ app.get('/api/sync/returnable-items', async (req, res) => {
         for (const ret of coupangReturns) {
           // 상태 매핑: 쿠팡 receiptStatus → 네이버 claimStatus 호환
           const statusMap = {
-            'PR': 'RETURN_DONE', 'VENDOR_WAREHOUSE_CONFIRM': 'RETURN_DONE',
+            'PR': 'WAREHOUSE_CONFIRM', 'VENDOR_WAREHOUSE_CONFIRM': 'WAREHOUSE_CONFIRM',
+            'REQUEST_COUPANG_CHECK': 'WAREHOUSE_CONFIRM',
             'CC': 'COLLECT_DONE', 'UNIT_COLLECTED': 'COLLECT_DONE',
+            'RETURNS_COMPLETED': 'RETURN_DONE',
             'UC': 'COLLECTING', 'RETURNS_UNCHECKED': 'COLLECTING',
             'RU': 'COLLECTING', 'RELEASE_STOP_UNCHECKED': 'COLLECTING',
           };
