@@ -3271,10 +3271,11 @@
             countBadge.textContent = items.length;
             countBadge.style.display = '';
 
-            // 상태별 그룹핑 (수거완료/입고완료/반품완료/실수거완료 4그룹)
+            // 상태별 그룹핑 (반품접수/수거완료/입고완료/반품완료/실수거완료 5그룹)
             const groups = {};
-            const statusOrder = ['COLLECT_DONE', 'WAREHOUSE_CONFIRM', 'RETURN_DONE', 'PICKUP_CONFIRMED'];
+            const statusOrder = ['COLLECTING', 'COLLECT_DONE', 'WAREHOUSE_CONFIRM', 'RETURN_DONE', 'PICKUP_CONFIRMED'];
             const statusLabels = {
+                'COLLECTING': '반품접수',
                 'COLLECT_DONE': '수거완료',
                 'WAREHOUSE_CONFIRM': '입고완료',
                 'RETURN_DONE': '반품완료',
@@ -3311,7 +3312,7 @@
                     // 버튼 분기
                     const added = item.alreadyAdded;
                     const confirmed = item.confirmedPickup;
-                    const canConfirm = (st === 'COLLECT_DONE');
+                    const canConfirm = (st === 'COLLECT_DONE' || st === 'COLLECTING');
                     let rowClass = 'return-item-row';
                     let btnHtml = '';
 
