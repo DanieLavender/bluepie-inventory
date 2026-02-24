@@ -169,8 +169,9 @@ class CoupangClient {
     const from = this.formatCoupangDate(fromDate);
     const to = this.formatCoupangDate(toDate);
     // 쿠팡 반품 상태별 조회 (status 필수)
-    // UC=반품접수, CC=수거완료, WC=입고완료(VENDOR_WAREHOUSE_CONFIRM), RF=반품완료
-    const statuses = ['UC', 'CC', 'WC', 'RF'];
+    // UC=반품접수, CC=수거완료 (허용값 확인 후 입고완료 코드 추가 예정)
+    // 허용값 탐색: 유효하지 않은 코드를 보내서 전체 허용 목록을 로그로 확인
+    const statuses = ['UC', 'CC', 'XX'];
 
     for (const status of statuses) {
       let nextToken = null;
@@ -192,7 +193,7 @@ class CoupangClient {
         try {
           data = await this.apiCall('GET', fullPath);
         } catch (e) {
-          console.log(`[${this.storeName}] 반품 ${status} 조회: ${e.message.slice(0, 100)}`);
+          console.log(`[${this.storeName}] 반품 ${status} 조회: ${e.message.slice(0, 500)}`);
           break;
         }
         if (!data || !data.data) break;
