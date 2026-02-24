@@ -249,10 +249,16 @@ class ZigzagClient {
 
   async testConnection() {
     const urls = [
-      'https://api.zigzag.kr/graphql',
-      'https://api.kakaostyle.com/graphql',
-      'https://partners.kakaostyle.com/graphql',
+      'https://openapi.kakaostyle.com/graphql',
+      'https://partner-api.kakaostyle.com/graphql',
+      'https://api.partners.kakaostyle.com/graphql',
+      'https://zigzag.kr/graphql',
+      'https://zigzag.kr/api/graphql',
+      'https://zigzag.kr/_openapi/api/graphql',
       'https://openapi.zigzag.kr/graphql',
+      'https://api.zigzag.kr/graphql',
+      'https://partners.kakaostyle.com/api/graphql',
+      'https://partners.kakaostyle.com/graphql',
       'https://zigzag.kr/_openapi/graphql',
     ];
     const headerSets = [
@@ -269,7 +275,10 @@ class ZigzagClient {
         try {
           const res = await fetch(url, { method: 'POST', headers, body: testQuery });
           const status = res.status;
-          if (status === 404 || status === 403) continue; // 해당 URL/헤더 조합 아님
+          if (status === 404 || status === 403) {
+            errors.push(`${url}: HTTP ${status}`);
+            continue;
+          }
 
           const text = await res.text();
           let json;
