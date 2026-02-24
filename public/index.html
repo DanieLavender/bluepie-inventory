@@ -4591,16 +4591,6 @@
         document.getElementById('installBtn').style.display = 'none';
     }
 
-    // ===== 화면 세로 고정 (자동 회전 차단) =====
-    function lockPortrait() {
-        const orientation = screen.orientation || screen.mozOrientation || screen.msOrientation;
-        if (orientation && orientation.lock) {
-            orientation.lock('portrait').catch(() => {});
-        }
-    }
-    lockPortrait();
-    // fullscreen 진입 시에도 재잠금
-    document.addEventListener('fullscreenchange', lockPortrait);
     </script>
 
 </body>
