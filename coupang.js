@@ -225,7 +225,17 @@ class CoupangClient {
       await this.sleep(100);
     }
 
-    return allReturns;
+    // receiptId 기준 중복 제거 (여러 status 쿼리에서 같은 건이 반환될 수 있음)
+    const seen = new Set();
+    const unique = allReturns.filter(r => {
+      if (seen.has(r.receiptId)) return false;
+      seen.add(r.receiptId);
+      return true;
+    });
+    if (unique.length < allReturns.length) {
+      console.log(`[${this.storeName}] 반품 중복 제거: ${allReturns.length}건 → ${unique.length}건`);
+    }
+    return unique;
   }
 
   // === 연결 테스트 ===
