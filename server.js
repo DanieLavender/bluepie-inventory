@@ -622,6 +622,11 @@ app.get('/api/sync/returnable-items', async (req, res) => {
         const cDist = {};
         for (const r of coupangReturns) { cDist[r.receiptStatus] = (cDist[r.receiptStatus] || 0) + 1; }
         console.log(`[Returnable] 쿠팡 receiptStatus 분포:`, JSON.stringify(cDist));
+        // 개별 아이템 로깅 (중복 확인용)
+        for (const r of coupangReturns) {
+          const itemNames = (r.returnItems || []).map(i => i.vendorItemName?.slice(0, 30)).join(', ');
+          console.log(`[Returnable] 쿠팡 개별: receiptId=${r.receiptId} status=${r.receiptStatus} items=[${itemNames}]`);
+        }
 
         for (const ret of coupangReturns) {
           // 상태 매핑: 쿠팡 receiptStatus → 네이버 claimStatus 호환

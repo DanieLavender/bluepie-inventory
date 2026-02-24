@@ -3285,6 +3285,8 @@
             for (const item of items) {
                 // 실수거완료된 건은 별도 그룹
                 const st = item.confirmedPickup ? 'PICKUP_CONFIRMED' : (item.claimStatus || '기타');
+                // 반품접수(COLLECTING)는 쿠팡만 표시
+                if (st === 'COLLECTING' && item.store !== 'C') continue;
                 if (!groups[st]) groups[st] = [];
                 groups[st].push(item);
             }
