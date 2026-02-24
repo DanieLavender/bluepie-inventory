@@ -1466,34 +1466,6 @@
         }
         .spinning svg { animation: spin 0.8s linear infinite; }
 
-        /* ===== 30b. Rotation Control Button ===== */
-        .rotate-btn {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 20px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            border-radius: 24px;
-            border: none;
-            font-size: 14px;
-            font-weight: 500;
-            font-family: inherit;
-            z-index: 400;
-            display: none;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            animation: fadeUp 0.2s ease;
-            gap: 6px;
-            align-items: center;
-            white-space: nowrap;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .rotate-btn.visible { display: flex; }
-        .rotate-btn:active { background: rgba(0,0,0,0.6); }
-        .rotate-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
-
         /* ===== 31. Responsive: Tablet ===== */
         @media (max-width: 1024px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2286,12 +2258,6 @@
             삭제
         </button>
     </div>
-
-    <!-- ===== Rotation Button ===== -->
-    <button class="rotate-btn" id="rotateBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-        <span id="rotateBtnLabel">가로 보기</span>
-    </button>
 
     <!-- ===== Toast ===== -->
     <div class="toast" id="toast"></div>
@@ -4627,120 +4593,5 @@
     }
     </script>
 
-    <script>
-    // ===== Screen Rotation Control (Android-like) =====
-    (function() {
-        // 모바일에서만 작동
-        if (window.innerWidth > 768 && window.innerHeight > 768) return;
-        if (!screen.orientation) return;
-
-        const btn = document.getElementById('rotateBtn');
-        const label = document.getElementById('rotateBtnLabel');
-        if (!btn) return;
-
-        let currentLock = 'portrait';
-        let hideTimer = null;
-        let isLocked = false;
-
-        // 초기: 세로 고정 시도
-        async function lockPortrait() {
-            try {
-                await screen.orientation.lock('portrait-primary');
-                isLocked = true;
-                currentLock = 'portrait';
-            } catch(e) {
-                // lock 미지원 (일반 브라우저) → fallback
-                isLocked = false;
-            }
-        }
-
-        function showBtn(targetLabel) {
-            label.textContent = targetLabel;
-            btn.classList.add('visible');
-            clearTimeout(hideTimer);
-            hideTimer = setTimeout(() => btn.classList.remove('visible'), 4000);
-        }
-
-        function hideBtn() {
-            btn.classList.remove('visible');
-            clearTimeout(hideTimer);
-        }
-
-        // 버튼 클릭: 회전 토글
-        btn.addEventListener('click', async function() {
-            if (currentLock === 'portrait') {
-                try {
-                    await screen.orientation.lock('landscape-primary');
-                    isLocked = true;
-                    currentLock = 'landscape';
-                    showBtn('세로 보기');
-                } catch(e) {
-                    // fallback: lock 미지원
-                    screen.orientation.unlock();
-                    currentLock = 'landscape';
-                    hideBtn();
-                }
-            } else {
-                try {
-                    await screen.orientation.lock('portrait-primary');
-                    isLocked = true;
-                    currentLock = 'portrait';
-                    hideBtn();
-                } catch(e) {
-                    screen.orientation.unlock();
-                    currentLock = 'portrait';
-                    hideBtn();
-                }
-            }
-        });
-
-        // 물리적 기울기 감지 (deviceorientation)
-        let lastTilt = 'portrait';
-        window.addEventListener('deviceorientation', function(e) {
-            if (e.gamma === null) return;
-            const absGamma = Math.abs(e.gamma);
-
-            let tilt;
-            if (absGamma > 50) {
-                tilt = 'landscape';
-            } else if (absGamma < 30) {
-                tilt = 'portrait';
-            } else {
-                return; // 중간 각도 무시 (흔들림 방지)
-            }
-
-            if (tilt === lastTilt) return;
-            lastTilt = tilt;
-
-            if (tilt === 'landscape' && currentLock === 'portrait') {
-                showBtn('가로 보기');
-            } else if (tilt === 'portrait' && currentLock === 'landscape') {
-                showBtn('세로 보기');
-            } else {
-                hideBtn();
-            }
-        }, { passive: true });
-
-        // fallback: lock 미지원 시 orientationchange 감지
-        if (!isLocked) {
-            let prevType = screen.orientation.type;
-            screen.orientation.addEventListener('change', function() {
-                const type = screen.orientation.type;
-                if (type === prevType) return;
-                prevType = type;
-
-                if (type.includes('landscape')) {
-                    currentLock = 'landscape';
-                    showBtn('세로 보기');
-                } else {
-                    currentLock = 'portrait';
-                    hideBtn();
-                }
-            });
-        }
-
-        lockPortrait();
-    })();
-    </script>
 </body>
 </html>
