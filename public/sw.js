@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'bluefi-v6';
+const CACHE_VERSION = 'bluefi-v7';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

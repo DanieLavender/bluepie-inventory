@@ -4591,6 +4591,10 @@
         document.getElementById('installBtn').style.display = 'none';
     }
 
+    // 세로 고정 (standalone 모드에서만 동작)
+    if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait-primary').catch(() => {});
+    }
     </script>
 
 </body>
