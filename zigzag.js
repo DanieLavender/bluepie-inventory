@@ -3,7 +3,7 @@ class ZigzagClient {
     this.accessKey = accessKey;
     this.secretKey = secretKey;
     this.storeName = storeName;
-    this.graphqlUrl = 'https://openapi.zigzag.kr/graphql';
+    this.graphqlUrl = 'https://zigzag.kr/_openapi/graphql';
   }
 
   // === 인증 헤더 ===
