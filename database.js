@@ -222,6 +222,7 @@ async function initDb() {
       sku VARCHAR(20) UNIQUE NOT NULL,
       name VARCHAR(500) NOT NULL,
       brand VARCHAR(10) DEFAULT '',
+      supplier VARCHAR(50) DEFAULT '',
       color VARCHAR(255) DEFAULT '',
       size VARCHAR(255) DEFAULT NULL,
       qty INT NOT NULL DEFAULT 0,
@@ -231,6 +232,8 @@ async function initDb() {
       updated_at DATETIME DEFAULT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // supplier 컬럼 추가 (기존 테이블 대응)
+  try { await query('ALTER TABLE master_products ADD COLUMN supplier VARCHAR(50) DEFAULT ""'); } catch(e) {}
 
   // === 채널별 상품 매핑 (마스터 1개 → 채널 N개) ===
   await query(`
@@ -252,26 +255,34 @@ async function initDb() {
   `);
 
   // === 마이그레이션: inventory → master_products (1회성) ===
+  // 품번 형식: 2026OV001 (연도4자리 + 거래처이니셜 대문자 + 순번3자리)
   const [masterMigrated] = await getPool().query(
-    "SELECT value FROM sync_config WHERE `key` = 'master_products_migrated'"
+    "SELECT value FROM sync_config WHERE `key` = 'master_products_v2_migrated'"
   ).catch(() => [[]]);
   if (!masterMigrated || masterMigrated.length === 0 || masterMigrated[0]?.value !== 'true') {
+    // v1 마이그레이션 데이터가 있으면 삭제 (BF-0001 형식 → 새 형식으로 재생성)
+    await query("DELETE FROM channel_products").catch(() => {});
+    await query("DELETE FROM master_products").catch(() => {});
+
     const invRows = await query('SELECT * FROM inventory ORDER BY id');
     if (invRows.length > 0) {
-      const masterCount = await query('SELECT COUNT(*) as cnt FROM master_products');
-      if (masterCount[0].cnt === 0) {
-        for (let i = 0; i < invRows.length; i++) {
-          const row = invRows[i];
-          const skuNum = String(i + 1).padStart(4, '0');
-          const sku = `BF-${skuNum}`;
-          await query(
-            `INSERT IGNORE INTO master_products (sku, name, brand, color, size, qty, stock_type, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 'inventory', ?, ?)`,
-            [sku, row.name, row.brand || '', row.color, row.size || null, row.qty, row.created_at, row.updated_at]
-          );
-        }
-        console.log(`[DB] master_products 마이그레이션 완료: ${invRows.length}개 (BF-0001 ~ BF-${String(invRows.length).padStart(4, '0')})`);
+      // 거래처(brand)별 순번 카운터
+      const supplierCounters = {};
+      const year = new Date().getFullYear(); // 2026
+      for (const row of invRows) {
+        const brand = (row.brand || '').toUpperCase() || 'ETC';
+        if (!supplierCounters[brand]) supplierCounters[brand] = 0;
+        supplierCounters[brand]++;
+        const num = String(supplierCounters[brand]).padStart(3, '0');
+        const sku = `${year}${brand}${num}`;
+        await query(
+          `INSERT IGNORE INTO master_products (sku, name, brand, supplier, color, size, qty, stock_type, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'inventory', ?, ?)`,
+          [sku, row.name, row.brand || '', brand, row.color, row.size || null, row.qty, row.created_at, row.updated_at]
+        );
       }
+      const skuExamples = Object.entries(supplierCounters).map(([k,v]) => `${k}:${v}개`).join(', ');
+      console.log(`[DB] master_products 마이그레이션 완료: ${invRows.length}개 (${skuExamples})`);
     }
 
     // 기존 channel_product_mapping → channel_products 이관
@@ -324,7 +335,7 @@ async function initDb() {
     }
 
     await query(
-      "INSERT INTO sync_config (`key`, value) VALUES ('master_products_migrated', 'true') ON DUPLICATE KEY UPDATE value = 'true'"
+      "INSERT INTO sync_config (`key`, value) VALUES ('master_products_v2_migrated', 'true') ON DUPLICATE KEY UPDATE value = 'true'"
     );
     const chCount = await query('SELECT COUNT(*) as cnt FROM channel_products');
     console.log(`[DB] channel_products 이관 완료: ${chCount[0].cnt}개`);

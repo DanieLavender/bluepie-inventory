@@ -2254,6 +2254,15 @@
                             <option value="zigzag">지그재그</option>
                             <option value="unlinked">미연결</option>
                         </select>
+                        <select id="masterSortFilter" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+                            <option value="">기본 정렬</option>
+                            <option value="sku">품번순</option>
+                            <option value="name">이름순</option>
+                            <option value="newest">최신 등록순</option>
+                            <option value="updated">최근 수정순</option>
+                            <option value="qty_desc">재고 많은순</option>
+                            <option value="qty_asc">재고 적은순</option>
+                        </select>
                         <button onclick="loadMasterProducts()" class="btn btn-accent" style="padding:8px 16px;font-size:13px;">검색</button>
                     </div>
                 </div>
@@ -5200,10 +5209,12 @@
         const search = document.getElementById('masterSearch')?.value || '';
         const stockType = document.getElementById('masterStockFilter')?.value || '';
         const channel = document.getElementById('masterChannelFilter')?.value || '';
+        const sort = document.getElementById('masterSortFilter')?.value || '';
         const params = new URLSearchParams({ page: masterCurrentPage, limit: 30 });
         if (search) params.set('search', search);
         if (stockType) params.set('stockType', stockType);
         if (channel) params.set('channel', channel);
+        if (sort) params.set('sort', sort);
 
         try {
             const data = await api(`/api/master/products?${params}`);
@@ -5225,6 +5236,12 @@
         // PC: 테이블, 모바일: 카드
         const isMobile = window.innerWidth <= 768;
 
+        function formatMasterDate(d) {
+            if (!d) return '-';
+            const dt = new Date(d);
+            return `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
+        }
+
         if (isMobile) {
             container.innerHTML = data.items.map(item => {
                 const channelBadges = (item.channels || []).map(ch => {
@@ -5234,14 +5251,16 @@
                 const stockLabel = item.stock_type === 'inventory'
                     ? `<span style="color:#16A34A;font-weight:600;">${item.qty}개</span>`
                     : '<span style="color:#EA580C;font-size:11px;">사입</span>';
+                const salesQty = item.sales && item.sales.totalQty > 0
+                    ? `<span style="font-size:11px;color:var(--accent);">판매 ${item.sales.totalQty}개</span>` : '';
                 return `<div style="padding:12px 0;border-bottom:1px solid var(--border);">
                     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px;">
                         <span style="font-size:11px;color:var(--text-tertiary);font-weight:600;">${item.sku}</span>
-                        ${stockLabel}
+                        <div>${salesQty} ${stockLabel}</div>
                     </div>
                     <div style="font-size:13px;font-weight:500;margin-bottom:4px;">${escapeHtml(item.name)}</div>
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span style="font-size:12px;color:var(--text-secondary);">${escapeHtml(item.color || '')}</span>
+                        <span style="font-size:12px;color:var(--text-secondary);">${escapeHtml(item.color || '')}${item.supplier ? ` · ${item.supplier}` : ''}</span>
                         <div>${channelBadges || '<span style="font-size:10px;color:var(--text-tertiary);">미연결</span>'}</div>
                     </div>
                 </div>`;
@@ -5250,12 +5269,15 @@
             container.innerHTML = `
                 <table class="inventory-table" style="width:100%;font-size:13px;">
                     <thead><tr>
-                        <th style="width:80px;">품번</th>
+                        <th style="width:100px;">품번</th>
                         <th>상품명</th>
-                        <th style="width:100px;">컬러</th>
-                        <th style="width:60px;">유형</th>
-                        <th style="width:60px;text-align:center;">재고</th>
-                        <th style="width:200px;">판매 채널</th>
+                        <th style="width:80px;">컬러</th>
+                        <th style="width:50px;">거래처</th>
+                        <th style="width:45px;">유형</th>
+                        <th style="width:40px;text-align:center;">재고</th>
+                        <th style="width:55px;text-align:center;">판매</th>
+                        <th style="width:80px;">등록일</th>
+                        <th style="width:160px;">채널</th>
                     </tr></thead>
                     <tbody>${data.items.map(item => {
                         const channelBadges = (item.channels || []).map(ch => {
@@ -5268,12 +5290,18 @@
                         const typeLabel = item.stock_type === 'inventory'
                             ? '<span style="color:#16A34A;">재고</span>'
                             : '<span style="color:#EA580C;">사입</span>';
+                        const salesQty = item.sales && item.sales.totalQty > 0
+                            ? `<span style="color:var(--accent);font-weight:600;">${item.sales.totalQty}</span>`
+                            : '<span style="color:var(--text-tertiary);">-</span>';
                         return `<tr>
-                            <td style="font-weight:600;color:var(--accent);">${item.sku}</td>
+                            <td style="font-weight:600;color:var(--accent);font-size:12px;">${item.sku}</td>
                             <td>${escapeHtml(item.name)}</td>
                             <td>${escapeHtml(item.color || '')}</td>
+                            <td style="text-align:center;">${escapeHtml(item.supplier || item.brand || '')}</td>
                             <td>${typeLabel}</td>
                             <td style="text-align:center;">${stockLabel}</td>
+                            <td style="text-align:center;">${salesQty}</td>
+                            <td style="font-size:11px;color:var(--text-secondary);">${formatMasterDate(item.created_at)}</td>
                             <td>${channelBadges || '<span style="color:var(--text-tertiary);font-size:11px;">미연결</span>'}</td>
                         </tr>`;
                     }).join('')}</tbody>

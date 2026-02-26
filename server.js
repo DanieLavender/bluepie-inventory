@@ -196,6 +196,8 @@ app.get('/api/master/products', async (req, res) => {
     if (sort === 'sku') orderBy = 'm.sku ASC';
     if (sort === 'qty_asc') orderBy = 'm.qty ASC';
     if (sort === 'qty_desc') orderBy = 'm.qty DESC';
+    if (sort === 'newest') orderBy = 'm.created_at DESC';
+    if (sort === 'oldest') orderBy = 'm.created_at ASC';
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
     params.push(parseInt(limit), offset);
@@ -220,9 +222,48 @@ app.get('/api/master/products', async (req, res) => {
       }
     }
 
+    // 각 상품의 매출 데이터 집계 (channel_products → sales_orders 조인)
+    let salesMap = {};
+    if (masterIds.length > 0) {
+      const ph = masterIds.map(() => '?').join(',');
+      const storeMap = { naver_a: 'A', naver_b: 'B', coupang: 'C', zigzag: 'D' };
+      // channel_products에서 모든 채널 ID 수집
+      const allChannels = [];
+      for (const mid of masterIds) {
+        for (const ch of (channelMap[mid] || [])) {
+          allChannels.push({ masterId: mid, store: storeMap[ch.channel] || '', channelId: ch.channel_product_id });
+        }
+      }
+      if (allChannels.length > 0) {
+        // OR 조건으로 한번에 조회
+        const orConds = allChannels.map(() => '(store = ? AND channel_product_no = ?)');
+        const orParams = [];
+        for (const ac of allChannels) { orParams.push(ac.store, ac.channelId); }
+        const salesRows = await query(
+          `SELECT store, channel_product_no, SUM(qty) as total_qty, SUM(total_amount) as total_amount, MIN(order_date) as first_order
+           FROM sales_orders WHERE ${orConds.join(' OR ')} GROUP BY store, channel_product_no`,
+          orParams
+        );
+        // channel_product_no → master_id 역매핑
+        const cpToMaster = {};
+        for (const ac of allChannels) { cpToMaster[`${ac.store}_${ac.channelId}`] = ac.masterId; }
+        for (const sr of salesRows) {
+          const mid = cpToMaster[`${sr.store}_${sr.channel_product_no}`];
+          if (!mid) continue;
+          if (!salesMap[mid]) salesMap[mid] = { totalQty: 0, totalAmount: 0, firstOrder: null };
+          salesMap[mid].totalQty += Number(sr.total_qty) || 0;
+          salesMap[mid].totalAmount += Number(sr.total_amount) || 0;
+          if (sr.first_order && (!salesMap[mid].firstOrder || sr.first_order < salesMap[mid].firstOrder)) {
+            salesMap[mid].firstOrder = sr.first_order;
+          }
+        }
+      }
+    }
+
     const items = rows.map(r => ({
       ...r,
       channels: channelMap[r.id] || [],
+      sales: salesMap[r.id] || { totalQty: 0, totalAmount: 0, firstOrder: null },
     }));
 
     res.json({ items, total, page: parseInt(page), limit: parseInt(limit) });
@@ -231,13 +272,35 @@ app.get('/api/master/products', async (req, res) => {
   }
 });
 
-// GET /api/master/products/:id - 마스터 상품 상세 (채널 전체 정보)
+// GET /api/master/products/:id - 마스터 상품 상세 (채널 + 매출 전체 정보)
 app.get('/api/master/products/:id', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM master_products WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: '상품 없음' });
     const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
-    res.json({ ...rows[0], channels });
+
+    // 채널별 매출 집계
+    const storeMap = { naver_a: 'A', naver_b: 'B', coupang: 'C', zigzag: 'D' };
+    let sales = { totalQty: 0, totalAmount: 0, firstOrder: null, byChannel: {} };
+    for (const ch of channels) {
+      const store = storeMap[ch.channel];
+      if (!store || !ch.channel_product_id) continue;
+      const sRows = await query(
+        'SELECT SUM(qty) as tq, SUM(total_amount) as ta, MIN(order_date) as fo FROM sales_orders WHERE store = ? AND channel_product_no = ?',
+        [store, ch.channel_product_id]
+      );
+      if (sRows[0] && sRows[0].tq) {
+        const chSales = { qty: Number(sRows[0].tq), amount: Number(sRows[0].ta), firstOrder: sRows[0].fo };
+        sales.totalQty += chSales.qty;
+        sales.totalAmount += chSales.amount;
+        if (chSales.firstOrder && (!sales.firstOrder || chSales.firstOrder < sales.firstOrder)) {
+          sales.firstOrder = chSales.firstOrder;
+        }
+        sales.byChannel[ch.channel] = chSales;
+      }
+    }
+
+    res.json({ ...rows[0], channels, sales });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -317,13 +380,22 @@ app.get('/api/master/stats', async (req, res) => {
   }
 });
 
-// GET /api/master/next-sku - 다음 품번 조회
+// GET /api/master/next-sku - 다음 품번 조회 (거래처 이니셜 필요)
 app.get('/api/master/next-sku', async (req, res) => {
   try {
-    const rows = await query("SELECT sku FROM master_products ORDER BY sku DESC LIMIT 1");
-    if (rows.length === 0) return res.json({ nextSku: 'BF-0001' });
-    const lastNum = parseInt(rows[0].sku.replace('BF-', ''), 10);
-    const nextSku = `BF-${String(lastNum + 1).padStart(4, '0')}`;
+    const supplier = (req.query.supplier || 'ETC').toUpperCase();
+    const year = new Date().getFullYear();
+    const prefix = `${year}${supplier}`;
+    const rows = await query(
+      "SELECT sku FROM master_products WHERE sku LIKE ? ORDER BY sku DESC LIMIT 1",
+      [`${prefix}%`]
+    );
+    let nextNum = 1;
+    if (rows.length > 0) {
+      const numPart = rows[0].sku.replace(prefix, '');
+      nextNum = parseInt(numPart, 10) + 1;
+    }
+    const nextSku = `${prefix}${String(nextNum).padStart(3, '0')}`;
     res.json({ nextSku });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -333,16 +405,22 @@ app.get('/api/master/next-sku', async (req, res) => {
 // POST /api/master/products - 마스터 상품 추가
 app.post('/api/master/products', async (req, res) => {
   try {
-    const { name, brand, color, size, qty, stock_type, image_url } = req.body;
+    const { name, brand, supplier, color, size, qty, stock_type, image_url } = req.body;
     if (!name) return res.status(400).json({ error: '상품명 필수' });
-    // 다음 품번 자동 생성
-    const skuRows = await query("SELECT sku FROM master_products ORDER BY sku DESC LIMIT 1");
+    // 품번 자동 생성: 연도 + 거래처이니셜 + 순번3자리
+    const sup = (supplier || brand || 'ETC').toUpperCase();
+    const year = new Date().getFullYear();
+    const prefix = `${year}${sup}`;
+    const skuRows = await query("SELECT sku FROM master_products WHERE sku LIKE ? ORDER BY sku DESC LIMIT 1", [`${prefix}%`]);
     let nextNum = 1;
-    if (skuRows.length > 0) nextNum = parseInt(skuRows[0].sku.replace('BF-', ''), 10) + 1;
-    const sku = `BF-${String(nextNum).padStart(4, '0')}`;
+    if (skuRows.length > 0) {
+      const numPart = skuRows[0].sku.replace(prefix, '');
+      nextNum = parseInt(numPart, 10) + 1;
+    }
+    const sku = `${prefix}${String(nextNum).padStart(3, '0')}`;
     const result = await query(
-      `INSERT INTO master_products (sku, name, brand, color, size, qty, stock_type, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sku, name, brand || '', color || '', size || null, qty || 0, stock_type || 'sourcing', image_url || null]
+      `INSERT INTO master_products (sku, name, brand, supplier, color, size, qty, stock_type, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sku, name, brand || '', sup, color || '', size || null, qty || 0, stock_type || 'sourcing', image_url || null]
     );
     const rows = await query('SELECT * FROM master_products WHERE id = ?', [result.insertId]);
     res.json(rows[0]);
