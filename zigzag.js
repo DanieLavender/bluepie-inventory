@@ -272,6 +272,139 @@ class ZigzagClient {
     return unique;
   }
 
+  // === 상품 등록/관리 ===
+
+  /**
+   * 상품 등록
+   * @param {Object} productInput - 지그재그 상품 등록 데이터
+   * @returns {Object} 등록 결과 { product_id, ... }
+   */
+  async createProduct(productInput) {
+    const mutation = `mutation($input: CreateProductInput!) {
+      createProduct(input: $input) {
+        product_id
+        name
+        status
+      }
+    }`;
+    return this.apiCall(mutation, { input: productInput });
+  }
+
+  /**
+   * 상품 수정
+   * @param {Object} productInput - product_id 포함
+   * @returns {Object} 수정 결과
+   */
+  async updateProduct(productInput) {
+    const mutation = `mutation($input: UpdateProductInput!) {
+      updateProduct(input: $input) {
+        product_id
+        name
+        status
+      }
+    }`;
+    return this.apiCall(mutation, { input: productInput });
+  }
+
+  /**
+   * 상품 목록 조회
+   * @param {Object} options - { limit, skip, status }
+   * @returns {Object} { total_count, item_list }
+   */
+  async getProducts(options = {}) {
+    const queryStr = `query($limit_count: Int, $skip_count: Int, $status: ProductStatus) {
+      product_list(limit_count: $limit_count, skip_count: $skip_count, status: $status) {
+        total_count
+        item_list {
+          product_id
+          name
+          price
+          discount_price
+          status
+          image_url
+          date_created
+        }
+      }
+    }`;
+    return this.apiCall(queryStr, {
+      limit_count: options.limit || 50,
+      skip_count: options.skip || 0,
+      status: options.status || undefined,
+    });
+  }
+
+  /**
+   * 카테고리 목록 조회
+   * @returns {Object} 카테고리 트리
+   */
+  async getCategories() {
+    const queryStr = `query {
+      category_list {
+        category_id
+        name
+        parent_category_id
+        children { category_id name }
+      }
+    }`;
+    return this.apiCall(queryStr);
+  }
+
+  /**
+   * A 스토어(네이버) 상품 데이터를 지그재그 등록용으로 변환
+   * @param {Object} sourceProduct - NaverCommerceClient.getChannelProduct() 결과
+   * @param {Object} options - { categoryId, priceRate, namePrefix }
+   * @returns {Object} 지그재그 상품 등록 요청 데이터
+   */
+  static buildZigzagProductData(sourceProduct, options = {}) {
+    const origin = sourceProduct.originProduct || sourceProduct;
+    const baseName = origin.name || '';
+    const {
+      categoryId = '',
+      priceRate = 0.85,
+      namePrefix = '',
+    } = options;
+
+    // 가격 계산
+    let actualPrice = origin.salePrice || 0;
+    const discount = origin.customerBenefit?.immediateDiscountPolicy?.discountMethod;
+    if (discount) {
+      if (discount.unitType === 'PERCENT') {
+        actualPrice = Math.round(origin.salePrice * (1 - discount.value / 100));
+      } else {
+        actualPrice = origin.salePrice - (discount.value || 0);
+      }
+    }
+    const salePrice = Math.floor(actualPrice * priceRate / 10) * 10;
+
+    // 상품명
+    const productName = namePrefix && !baseName.startsWith(namePrefix)
+      ? `${namePrefix} ${baseName}` : baseName;
+
+    // 이미지 URL 추출
+    const imageUrls = [];
+    if (origin.images) {
+      if (origin.images.representativeImage?.url) {
+        imageUrls.push(origin.images.representativeImage.url);
+      }
+      if (origin.images.optionalImages) {
+        for (const img of origin.images.optionalImages) {
+          if (img.url) imageUrls.push(img.url);
+        }
+      }
+    }
+
+    return {
+      name: productName,
+      price: actualPrice,
+      discount_price: salePrice,
+      category_id: categoryId || undefined,
+      description: origin.detailContent || '',
+      images: imageUrls,
+      shipping_fee: 0,
+      status: 'SELLING',
+    };
+  }
+
   // === 연결 테스트 ===
 
   async testConnection() {

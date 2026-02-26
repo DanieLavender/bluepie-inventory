@@ -80,9 +80,14 @@ CREATE TABLE inventory (
 | POST | /api/push/subscribe | 푸시 구독 저장 |
 | POST | /api/push/unsubscribe | 푸시 구독 해제 |
 | POST | /api/push/test | 테스트 푸시 발송 |
+| GET | /api/store-a/products/search | A 스토어 상품 검색 (keyword 파라미터) |
+| GET | /api/store-a/products/:id | A 스토어 상품 상세 |
+| POST | /api/products/copy | 멀티채널 상품 복사 (body: channelProductNo, targets[], options?) |
+| POST | /api/products/copy-bulk | 일괄 멀티채널 복사 (body: products[], targets[], options?) |
+| GET | /api/products/copy-history | 복사 이력 조회 (page, limit) |
 
 ## 프론트엔드 기능
-- **SPA 라우팅**: 해시 기반 (#inventory, #sales, #log, #brands, #settings, #login)
+- **SPA 라우팅**: 해시 기반 (#inventory, #sales, #log, #brands, #copy, #settings, #login)
 - **재고 조회**: 30개씩 페이지네이션, 상품명/컬러 검색, 브랜드 필터, 7종 정렬 (최근 수정순 포함)
 - **재고 추가**: 모달에서 브랜드 선택(기존 목록 or 직접 입력) + 상품명/컬러/수량 입력 → "브랜드 상품명" 형태로 저장
 - **수량 변경**: +/- 버튼 또는 숫자 클릭→직접 입력, DB 즉시 반영
@@ -93,6 +98,7 @@ CREATE TABLE inventory (
 - **컬러 칩**: 한국어 색상명 → HEX 매핑 (colorMap 객체), 컬러 dot(10px) + 텍스트
 - **커스텀 체크박스**: CSS :checked + SVG 체크마크 (파란 배경)
 - **브랜드 배지**: CSS 클래스 기반 (.brand-ag ~ .brand-vi, 16개 + default)
+- **상품 복사**: A 스토어 상품 검색 → 스마트스토어B/쿠팡/지그재그 멀티채널 복사, 복사 이력 표시
 - **셸 페이지**: 매출 현황, 입출고 내역, 브랜드 관리, 설정, 로그인 (UI만)
 
 ## 레이아웃
@@ -170,10 +176,11 @@ A 스마트스토어 반품 완료 → B 스마트스토어 상품 수량 증가
 
 ### Sync DB 테이블
 - **sync_log**: 동기화 이력 (run_id, type, status, product info)
-  - type: `return_detect`, `qty_increase`, `product_create`, `inventory_update`, `error`
+  - type: `return_detect`, `qty_increase`, `product_create`, `inventory_update`, `product_copy`, `error`
 - **sync_config**: key-value 설정 (sync_enabled, sync_interval_minutes 등)
 - **product_mapping**: A↔B 상품 매핑 (match_status: matched/unmatched/manual)
-- **sales_orders**: 매출 주문 데이터 (store A/B/C, product_order_id UNIQUE)
+- **channel_product_mapping**: 멀티채널 상품 복사 매핑 (target_channel: storeB/coupang/zigzag, copy_status)
+- **sales_orders**: 매출 주문 데이터 (store A/B/C/D, product_order_id UNIQUE)
 - **push_subscriptions**: 웹 푸시 구독 (endpoint, p256dh, auth)
 
 ### 환경변수

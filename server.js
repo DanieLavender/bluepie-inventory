@@ -1211,7 +1211,9 @@ app.post('/api/sync/save-keys', async (req, res) => {
             store_b_display_status, store_b_sale_status, store_b_name_prefix,
             sync_interval_minutes,
             coupang_access_key, coupang_secret_key, coupang_vendor_id,
-            zigzag_access_key, zigzag_secret_key } = req.body;
+            coupang_category_code, coupang_outbound_code, coupang_return_center_code, coupang_price_rate,
+            zigzag_access_key, zigzag_secret_key,
+            zigzag_category_id, zigzag_price_rate } = req.body;
     const upsertSql = 'INSERT INTO sync_config (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()';
     if (store_a_client_id) await query(upsertSql, ['store_a_client_id', store_a_client_id]);
     if (store_a_client_secret) await query(upsertSql, ['store_a_client_secret', store_a_client_secret]);
@@ -1226,9 +1228,15 @@ app.post('/api/sync/save-keys', async (req, res) => {
     if (coupang_access_key) await query(upsertSql, ['coupang_access_key', coupang_access_key]);
     if (coupang_secret_key) await query(upsertSql, ['coupang_secret_key', coupang_secret_key]);
     if (coupang_vendor_id) await query(upsertSql, ['coupang_vendor_id', coupang_vendor_id]);
+    if (coupang_category_code !== undefined) await query(upsertSql, ['coupang_category_code', coupang_category_code]);
+    if (coupang_outbound_code !== undefined) await query(upsertSql, ['coupang_outbound_code', coupang_outbound_code]);
+    if (coupang_return_center_code !== undefined) await query(upsertSql, ['coupang_return_center_code', coupang_return_center_code]);
+    if (coupang_price_rate !== undefined) await query(upsertSql, ['coupang_price_rate', coupang_price_rate]);
     // 지그재그
     if (zigzag_access_key) await query(upsertSql, ['zigzag_access_key', zigzag_access_key]);
     if (zigzag_secret_key) await query(upsertSql, ['zigzag_secret_key', zigzag_secret_key]);
+    if (zigzag_category_id !== undefined) await query(upsertSql, ['zigzag_category_id', zigzag_category_id]);
+    if (zigzag_price_rate !== undefined) await query(upsertSql, ['zigzag_price_rate', zigzag_price_rate]);
     scheduler.storeA = null;
     scheduler.storeB = null;
     res.json({ success: true });
@@ -1366,6 +1374,166 @@ app.get('/api/returns/confirmed', async (req, res) => {
     }));
 
     res.json(items);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Product Copy API ---
+
+// GET /api/store-a/products/search - A 스토어 상품 검색
+app.get('/api/store-a/products/search', async (req, res) => {
+  try {
+    await initSyncClients();
+    const { keyword } = req.query;
+    if (!keyword || keyword.trim().length === 0) {
+      return res.status(400).json({ error: '검색 키워드를 입력해주세요.' });
+    }
+
+    const results = await scheduler.storeA.searchProducts(keyword.trim());
+
+    // 각 상품에 기존 복사 매핑 정보 추가
+    const items = [];
+    for (const product of results) {
+      const channelProductNo = String(product.channelProductNo || product.id || '');
+      let mappings = [];
+      if (channelProductNo) {
+        mappings = await query(
+          'SELECT target_channel, target_product_id, copy_status FROM channel_product_mapping WHERE store_a_channel_product_no = ?',
+          [channelProductNo]
+        );
+      }
+
+      // 기존 product_mapping (B스토어)도 확인
+      let storeBMapping = null;
+      if (channelProductNo) {
+        const pmRows = await query(
+          'SELECT store_b_channel_product_no FROM product_mapping WHERE store_a_channel_product_no = ? AND match_status = ? LIMIT 1',
+          [channelProductNo, 'matched']
+        );
+        if (pmRows.length > 0) {
+          storeBMapping = pmRows[0].store_b_channel_product_no;
+        }
+      }
+
+      items.push({
+        channelProductNo,
+        originProductNo: product.originProductNo || '',
+        name: product.channelProductName || product.productName || '',
+        salePrice: product.salePrice || 0,
+        stockQuantity: product.stockQuantity || 0,
+        statusType: product.statusType || product.channelProductDisplayStatusType || '',
+        representativeImage: product.representativeImage?.url || product.imageUrl || '',
+        channelMappings: mappings,
+        storeBProductNo: storeBMapping,
+      });
+    }
+
+    res.json({ items, total: items.length });
+  } catch (e) {
+    console.error('[StoreA Search] 오류:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/store-a/products/:id - A 스토어 상품 상세
+app.get('/api/store-a/products/:id', async (req, res) => {
+  try {
+    await initSyncClients();
+    const { id } = req.params;
+    const product = await scheduler.storeA.getChannelProduct(id);
+    res.json(product);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/products/copy - 멀티채널 상품 복사
+app.post('/api/products/copy', async (req, res) => {
+  try {
+    await initSyncClients();
+    const { channelProductNo, targets, options } = req.body;
+
+    if (!channelProductNo) {
+      return res.status(400).json({ error: 'channelProductNo가 필요합니다.' });
+    }
+    if (!targets || !Array.isArray(targets) || targets.length === 0) {
+      return res.status(400).json({ error: '복사 대상 채널을 선택해주세요.' });
+    }
+
+    const validTargets = ['storeB', 'coupang', 'zigzag'];
+    const invalidTargets = targets.filter(t => !validTargets.includes(t));
+    if (invalidTargets.length > 0) {
+      return res.status(400).json({ error: `지원하지 않는 채널: ${invalidTargets.join(', ')}` });
+    }
+
+    const result = await scheduler.copyToChannels(channelProductNo, targets, options || {});
+    res.json(result);
+  } catch (e) {
+    console.error('[ProductCopy] 오류:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/products/copy-bulk - 여러 상품 일괄 복사
+app.post('/api/products/copy-bulk', async (req, res) => {
+  try {
+    await initSyncClients();
+    const { products, targets, options } = req.body;
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: '복사할 상품을 선택해주세요.' });
+    }
+    if (!targets || !Array.isArray(targets) || targets.length === 0) {
+      return res.status(400).json({ error: '복사 대상 채널을 선택해주세요.' });
+    }
+
+    const results = [];
+    for (const channelProductNo of products) {
+      try {
+        const result = await scheduler.copyToChannels(String(channelProductNo), targets, options || {});
+        results.push(result);
+      } catch (e) {
+        results.push({
+          source: { channelProductNo },
+          results: {},
+          error: e.message,
+        });
+      }
+      // API rate limit 방지
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    const summary = {
+      total: products.length,
+      success: results.filter(r => !r.error && Object.values(r.results || {}).some(v => v.success)).length,
+      failed: results.filter(r => r.error || Object.values(r.results || {}).every(v => !v.success)).length,
+    };
+
+    res.json({ summary, details: results });
+  } catch (e) {
+    console.error('[BulkCopy] 오류:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/products/copy-history - 복사 이력 조회
+app.get('/api/products/copy-history', async (req, res) => {
+  try {
+    const { page, limit: lim } = req.query;
+    const pageNum = parseInt(page) || 1;
+    const pageSize = parseInt(lim) || 30;
+    const offset = (pageNum - 1) * pageSize;
+
+    const countRows = await query('SELECT COUNT(*) as total FROM channel_product_mapping');
+    const total = countRows[0].total;
+
+    const rows = await query(
+      'SELECT * FROM channel_product_mapping ORDER BY updated_at DESC LIMIT ? OFFSET ?',
+      [pageSize, offset]
+    );
+
+    res.json({ items: rows, total, page: pageNum, totalPages: Math.ceil(total / pageSize) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

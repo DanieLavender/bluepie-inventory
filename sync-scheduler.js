@@ -622,6 +622,248 @@ class SyncScheduler {
     }
   }
 
+  // === Multi-channel product copy ===
+
+  /**
+   * A 스토어 상품을 여러 채널에 복사
+   * @param {string} channelProductNo - A 스토어 상품번호
+   * @param {string[]} targets - 복사 대상 ['storeB', 'coupang', 'zigzag']
+   * @param {Object} options - 채널별 옵션 (priceRates, namePrefixes, etc.)
+   * @returns {Object} 채널별 결과
+   */
+  async copyToChannels(channelProductNo, targets, options = {}) {
+    const runId = 'copy-' + Date.now();
+    const results = {};
+
+    // A 스토어 상품 조회
+    let sourceProduct;
+    try {
+      sourceProduct = await this.storeA.getChannelProduct(channelProductNo);
+    } catch (e) {
+      // channel product 조회 실패 시 origin product 시도
+      try {
+        sourceProduct = await this.storeA.getOriginProduct(channelProductNo);
+      } catch (e2) {
+        throw new Error(`A 스토어 상품 조회 실패: ${e.message}`);
+      }
+    }
+
+    const origin = sourceProduct.originProduct || sourceProduct;
+    const productName = origin.name || '';
+
+    for (const target of targets) {
+      try {
+        switch (target) {
+          case 'storeB':
+            results.storeB = await this.copyToStoreB(runId, channelProductNo, sourceProduct, options);
+            break;
+          case 'coupang':
+            results.coupang = await this.copyToCoupang(runId, channelProductNo, sourceProduct, options);
+            break;
+          case 'zigzag':
+            results.zigzag = await this.copyToZigzag(runId, channelProductNo, sourceProduct, options);
+            break;
+          default:
+            results[target] = { success: false, error: `알 수 없는 채널: ${target}` };
+        }
+      } catch (e) {
+        results[target] = { success: false, error: e.message };
+        await this.logSync(runId, 'product_copy', 'A', target, null, channelProductNo,
+          productName, null, 0, 'fail', `${target} 복사 실패: ${e.message}`);
+      }
+    }
+
+    return { runId, source: { channelProductNo, productName }, results };
+  }
+
+  /**
+   * A → B 스토어 직접 복사 (기존 copyAndCreateInStoreB 재활용)
+   */
+  async copyToStoreB(runId, channelProductNo, sourceProduct, options = {}) {
+    const origin = sourceProduct.originProduct || sourceProduct;
+    const productName = origin.name || '';
+
+    // 이미 매핑된 상품 확인
+    const existing = await query(
+      'SELECT * FROM channel_product_mapping WHERE store_a_channel_product_no = ? AND target_channel = ?',
+      [channelProductNo, 'storeB']
+    );
+    if (existing.length > 0 && existing[0].target_product_id) {
+      return { success: true, skipped: true, message: '이미 B 스토어에 등록된 상품입니다.', targetProductId: existing[0].target_product_id };
+    }
+
+    const namePrefix = options.storeBNamePrefix || await this.getConfig('store_b_name_prefix') || '(오늘출발)';
+    const copyData = NaverCommerceClient.buildProductCopyData(sourceProduct, 1, namePrefix);
+
+    // B 스토어 설정 적용
+    const bDisplayStatus = await this.getConfig('store_b_display_status') || 'ON';
+    const bSaleStatus = await this.getConfig('store_b_sale_status') || 'SALE';
+    copyData.smartstoreChannelProduct.channelProductDisplayStatusType = bDisplayStatus;
+    copyData.originProduct.statusType = bSaleStatus;
+
+    // 배송 정보
+    const sourceDelivery = origin.deliveryInfo;
+    const storeBDelivery = await this.getStoreBDeliveryInfo(sourceDelivery);
+    if (storeBDelivery) {
+      copyData.originProduct.deliveryInfo = JSON.parse(JSON.stringify(storeBDelivery));
+      if (sourceDelivery?.claimDeliveryInfo) {
+        if (!copyData.originProduct.deliveryInfo.claimDeliveryInfo) {
+          copyData.originProduct.deliveryInfo.claimDeliveryInfo = {};
+        }
+        const src = sourceDelivery.claimDeliveryInfo;
+        const dst = copyData.originProduct.deliveryInfo.claimDeliveryInfo;
+        if (src.returnDeliveryFee != null) dst.returnDeliveryFee = src.returnDeliveryFee;
+        if (src.exchangeDeliveryFee != null) dst.exchangeDeliveryFee = src.exchangeDeliveryFee;
+      }
+    }
+
+    const created = await this.storeB.createProduct(copyData);
+    const newProductNo = created?.smartstoreChannelProductNo
+      || created?.smartstoreChannelProduct?.channelProductNo
+      || created?.channelProductNo
+      || created?.originProductNo
+      || '';
+
+    // 매핑 저장
+    const storeBName = copyData.smartstoreChannelProduct?.channelProductName || productName;
+    await this.saveChannelMapping(channelProductNo, productName, 'storeB', String(newProductNo), storeBName, 'success');
+
+    await this.logSync(runId, 'product_copy', 'A', 'B', null, String(newProductNo),
+      productName, null, 1, 'success', `B 스토어 복사 완료`);
+
+    console.log(`[Copy] B 스토어 등록: ${productName} → ${newProductNo}`);
+    return { success: true, targetProductId: String(newProductNo), productName: storeBName };
+  }
+
+  /**
+   * A → 쿠팡 복사
+   */
+  async copyToCoupang(runId, channelProductNo, sourceProduct, options = {}) {
+    const origin = sourceProduct.originProduct || sourceProduct;
+    const productName = origin.name || '';
+
+    // 이미 매핑 확인
+    const existing = await query(
+      'SELECT * FROM channel_product_mapping WHERE store_a_channel_product_no = ? AND target_channel = ?',
+      [channelProductNo, 'coupang']
+    );
+    if (existing.length > 0 && existing[0].target_product_id) {
+      return { success: true, skipped: true, message: '이미 쿠팡에 등록된 상품입니다.', targetProductId: existing[0].target_product_id };
+    }
+
+    // 쿠팡 클라이언트 초기화
+    const getVal = async (key) => {
+      const rows = await query('SELECT value FROM sync_config WHERE `key` = ?', [key]);
+      return rows[0] ? rows[0].value : '';
+    };
+    const accessKey = process.env.COUPANG_ACCESS_KEY || await getVal('coupang_access_key');
+    const secretKey = process.env.COUPANG_SECRET_KEY || await getVal('coupang_secret_key');
+    const vendorId = process.env.COUPANG_VENDOR_ID || await getVal('coupang_vendor_id');
+
+    if (!accessKey || !secretKey || !vendorId) {
+      throw new Error('쿠팡 API 키가 설정되지 않았습니다.');
+    }
+
+    const coupang = new CoupangClient(accessKey, secretKey, vendorId);
+
+    // 설정 조회
+    const categoryCode = options.coupangCategoryCode || await getVal('coupang_category_code') || '';
+    const priceRate = parseFloat(options.coupangPriceRate || await getVal('coupang_price_rate')) || 0.85;
+    const outboundCode = options.coupangOutboundCode || await getVal('coupang_outbound_code') || '';
+    const returnCenterCode = options.coupangReturnCenterCode || await getVal('coupang_return_center_code') || '';
+
+    if (!categoryCode) {
+      throw new Error('쿠팡 카테고리 코드가 설정되지 않았습니다. 설정에서 입력해주세요.');
+    }
+
+    const coupangData = CoupangClient.buildCoupangProductData(sourceProduct, {
+      vendorId,
+      categoryCode: parseInt(categoryCode),
+      priceRate,
+      outboundCode,
+      returnCenterCode,
+      namePrefix: options.coupangNamePrefix || '',
+    });
+
+    const result = await coupang.createProduct(coupangData);
+    const sellerProductId = result?.data?.sellerProductId || result?.sellerProductId || '';
+
+    // 매핑 저장
+    await this.saveChannelMapping(channelProductNo, productName, 'coupang', String(sellerProductId), productName, 'success');
+
+    await this.logSync(runId, 'product_copy', 'A', 'C', null, String(sellerProductId),
+      productName, null, 1, 'success', `쿠팡 복사 완료 (가격비율: ${priceRate})`);
+
+    console.log(`[Copy] 쿠팡 등록: ${productName} → ${sellerProductId}`);
+    return { success: true, targetProductId: String(sellerProductId), productName };
+  }
+
+  /**
+   * A → 지그재그 복사
+   */
+  async copyToZigzag(runId, channelProductNo, sourceProduct, options = {}) {
+    const origin = sourceProduct.originProduct || sourceProduct;
+    const productName = origin.name || '';
+
+    // 이미 매핑 확인
+    const existing = await query(
+      'SELECT * FROM channel_product_mapping WHERE store_a_channel_product_no = ? AND target_channel = ?',
+      [channelProductNo, 'zigzag']
+    );
+    if (existing.length > 0 && existing[0].target_product_id) {
+      return { success: true, skipped: true, message: '이미 지그재그에 등록된 상품입니다.', targetProductId: existing[0].target_product_id };
+    }
+
+    // 지그재그 클라이언트 초기화
+    const getVal = async (key) => {
+      const rows = await query('SELECT value FROM sync_config WHERE `key` = ?', [key]);
+      return rows[0] ? rows[0].value : '';
+    };
+    const accessKey = process.env.ZIGZAG_ACCESS_KEY || await getVal('zigzag_access_key');
+    const secretKey = process.env.ZIGZAG_SECRET_KEY || await getVal('zigzag_secret_key');
+
+    if (!accessKey || !secretKey) {
+      throw new Error('지그재그 API 키가 설정되지 않았습니다.');
+    }
+
+    const zigzag = new ZigzagClient(accessKey, secretKey);
+
+    const priceRate = parseFloat(options.zigzagPriceRate || await getVal('zigzag_price_rate')) || 0.85;
+    const categoryId = options.zigzagCategoryId || await getVal('zigzag_category_id') || '';
+
+    const zigzagData = ZigzagClient.buildZigzagProductData(sourceProduct, {
+      categoryId,
+      priceRate,
+      namePrefix: options.zigzagNamePrefix || '',
+    });
+
+    const result = await zigzag.createProduct(zigzagData);
+    const productId = result?.createProduct?.product_id || '';
+
+    // 매핑 저장
+    await this.saveChannelMapping(channelProductNo, productName, 'zigzag', String(productId), productName, 'success');
+
+    await this.logSync(runId, 'product_copy', 'A', 'D', null, String(productId),
+      productName, null, 1, 'success', `지그재그 복사 완료 (가격비율: ${priceRate})`);
+
+    console.log(`[Copy] 지그재그 등록: ${productName} → ${productId}`);
+    return { success: true, targetProductId: String(productId), productName };
+  }
+
+  // === Channel mapping helpers ===
+
+  async saveChannelMapping(storeANo, storeAName, targetChannel, targetProductId, targetProductName, status) {
+    await query(`
+      INSERT INTO channel_product_mapping (store_a_channel_product_no, store_a_product_name, target_channel, target_product_id, target_product_name, copy_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        target_product_id = VALUES(target_product_id),
+        target_product_name = VALUES(target_product_name),
+        copy_status = VALUES(copy_status),
+        updated_at = NOW()
+    `, [storeANo, storeAName, targetChannel, targetProductId, targetProductName, status]);
+  }
+
   // === Push notification ===
 
   async sendPushNotification(title, body) {

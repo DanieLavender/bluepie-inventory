@@ -238,6 +238,133 @@ class CoupangClient {
     return unique;
   }
 
+  // === 상품 등록/관리 ===
+
+  /**
+   * 상품 등록
+   * @param {Object} productData - 쿠팡 상품 등록 데이터
+   * @returns {Object} 등록 결과
+   */
+  async createProduct(productData) {
+    const path = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products`;
+    return this.apiCall('POST', path, productData);
+  }
+
+  /**
+   * 상품 조회 (sellerProductId 기준)
+   * @param {string} sellerProductId
+   * @returns {Object} 상품 상세
+   */
+  async getProduct(sellerProductId) {
+    const path = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${sellerProductId}`;
+    return this.apiCall('GET', path);
+  }
+
+  /**
+   * 카테고리별 메타정보 조회 (필수 속성, 공지사항 타입 등)
+   * @param {number} categoryCode
+   * @returns {Object} 카테고리 메타
+   */
+  async getCategoryMeta(categoryCode) {
+    const path = `/v2/providers/seller_api/apis/api/v1/marketplace/meta/category-related-metas-by-categoryId?categoryId=${categoryCode}`;
+    return this.apiCall('GET', path);
+  }
+
+  /**
+   * A 스토어(네이버) 상품 데이터를 쿠팡 등록용으로 변환
+   * @param {Object} sourceProduct - NaverCommerceClient.getChannelProduct() 결과
+   * @param {Object} options - { vendorId, categoryCode, priceRate, outboundCode, returnCenterCode, namePrefix }
+   * @returns {Object} 쿠팡 상품 등록 요청 body
+   */
+  static buildCoupangProductData(sourceProduct, options = {}) {
+    const origin = sourceProduct.originProduct || sourceProduct;
+    const baseName = origin.name || '';
+    const {
+      vendorId,
+      categoryCode = 0,
+      priceRate = 0.85,
+      outboundCode = '',
+      returnCenterCode = '',
+      namePrefix = '',
+    } = options;
+
+    // 가격 계산
+    let actualPrice = origin.salePrice || 0;
+    const discount = origin.customerBenefit?.immediateDiscountPolicy?.discountMethod;
+    if (discount) {
+      if (discount.unitType === 'PERCENT') {
+        actualPrice = Math.round(origin.salePrice * (1 - discount.value / 100));
+      } else {
+        actualPrice = origin.salePrice - (discount.value || 0);
+      }
+    }
+    const salePrice = Math.floor(actualPrice * priceRate / 10) * 10;
+    const originalPrice = Math.floor(actualPrice / 10) * 10;
+
+    // 상품명
+    const productName = namePrefix && !baseName.startsWith(namePrefix)
+      ? `${namePrefix} ${baseName}` : baseName;
+
+    // 이미지 추출 (네이버 → 쿠팡 형식)
+    const images = [];
+    if (origin.images) {
+      if (origin.images.representativeImage?.url) {
+        images.push({
+          imageOrder: 0,
+          imageType: 'REPRESENTATION',
+          vendorPath: origin.images.representativeImage.url,
+        });
+      }
+      if (origin.images.optionalImages) {
+        origin.images.optionalImages.forEach((img, i) => {
+          if (img.url) {
+            images.push({
+              imageOrder: i + 1,
+              imageType: 'DETAIL',
+              vendorPath: img.url,
+            });
+          }
+        });
+      }
+    }
+
+    // 기본 아이템 (옵션 없이 단일 상품)
+    const item = {
+      itemName: productName,
+      originalPrice,
+      salePrice,
+      maximumBuyCount: 999,
+      unitCount: 1,
+      images: images.length > 0 ? images : undefined,
+    };
+
+    return {
+      displayCategoryCode: categoryCode,
+      sellerProductName: productName,
+      vendorId: vendorId,
+      brand: '',
+      generalProductName: productName,
+      productGroup: '',
+      deliveryInfo: {
+        deliveryType: 'NORMAL',
+        deliveryAttributeType: 'NORMAL',
+        deliveryCompanyCode: 'CJGLS',
+        deliveryChargeType: 'FREE',
+        deliveryCharge: 0,
+        freeShipOverAmount: 0,
+        deliveryChargeOnReturn: 5000,
+        outboundShippingPlaceCode: outboundCode ? parseInt(outboundCode) : undefined,
+        returnCenterCode: returnCenterCode || undefined,
+      },
+      returnCharge: 5000,
+      items: [item],
+      requiredDocuments: [],
+      extraInfoMessage: '',
+      manufacture: '',
+      statusType: 'SALE',
+    };
+  }
+
   // === 연결 테스트 ===
 
   async testConnection() {

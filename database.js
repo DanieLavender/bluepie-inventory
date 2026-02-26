@@ -179,6 +179,23 @@ async function initDb() {
     console.log(`[DB] 쿠팡 금액 0 레코드 삭제: ${delResult.affectedRows || 0}건, last_fetch 리셋`);
   }
 
+  // 멀티채널 상품 복사 매핑 테이블
+  await query(`
+    CREATE TABLE IF NOT EXISTS channel_product_mapping (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      store_a_channel_product_no VARCHAR(255) NOT NULL,
+      store_a_product_name TEXT DEFAULT NULL,
+      target_channel VARCHAR(20) NOT NULL,
+      target_product_id VARCHAR(255) DEFAULT NULL,
+      target_product_name TEXT DEFAULT NULL,
+      copy_status VARCHAR(20) DEFAULT 'pending',
+      copy_options JSON DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY (store_a_channel_product_no, target_channel)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // Seed sync_config defaults
   const configDefaults = [
     ['sync_enabled', 'false'],
@@ -199,6 +216,13 @@ async function initDb() {
     ['zigzag_secret_key', ''],
     ['vapid_public_key', ''],
     ['vapid_private_key', ''],
+    ['coupang_outbound_code', ''],
+    ['coupang_return_center_code', ''],
+    ['coupang_category_code', ''],
+    ['coupang_price_rate', '0.85'],
+    ['zigzag_price_rate', '0.85'],
+    ['zigzag_category_id', ''],
+    ['copy_default_targets', 'storeB'],
   ];
   for (const [k, v] of configDefaults) {
     await query(

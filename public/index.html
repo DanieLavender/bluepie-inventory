@@ -1609,6 +1609,75 @@
             .card-actions .qty-value { min-width: 26px; font-size: 13px; }
             .brand-card-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
             .brand-card-item { padding: 12px; }
+            .copy-product-card { flex-direction: column; }
+            .copy-product-card .copy-product-image { width: 100%; height: 120px; }
+            .copy-product-card .copy-product-info { padding: 10px; }
+        }
+
+        /* ===== Product Copy Page ===== */
+        .copy-channel-label { display:inline-flex; align-items:center; cursor:pointer; }
+        .copy-channel-label input[type="checkbox"] { display:none; }
+        .copy-channel-badge {
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+            border: 2px solid var(--ch-color, #ccc); color: var(--ch-color, #666);
+            background: transparent; transition: all 0.2s;
+        }
+        .copy-channel-label input:checked + .copy-channel-badge {
+            background: var(--ch-color, #ccc); color: #fff;
+        }
+        .copy-empty-state {
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding: 60px 20px; text-align:center;
+        }
+        .copy-product-list { display:flex; flex-direction:column; gap:8px; }
+        .copy-product-card {
+            display:flex; align-items:stretch; border:1px solid var(--border-light);
+            border-radius:var(--radius-md); overflow:hidden; transition:all 0.2s; cursor:pointer;
+        }
+        .copy-product-card:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(37,99,235,0.1); }
+        .copy-product-card.selected { border-color:var(--accent); background:rgba(37,99,235,0.03); }
+        .copy-product-check {
+            display:flex; align-items:center; padding:0 12px; flex-shrink:0;
+        }
+        .copy-product-check input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cursor:pointer; }
+        .copy-product-image {
+            width:80px; height:80px; flex-shrink:0; background:#F3F4F6;
+            display:flex; align-items:center; justify-content:center; overflow:hidden;
+        }
+        .copy-product-image img { width:100%; height:100%; object-fit:cover; }
+        .copy-product-info { flex:1; padding:10px 14px; display:flex; flex-direction:column; justify-content:center; gap:4px; min-width:0; }
+        .copy-product-name { font-size:13px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .copy-product-meta { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--text-secondary); }
+        .copy-product-meta span { display:inline-flex; align-items:center; gap:3px; }
+        .copy-product-channels { display:flex; gap:4px; flex-wrap:wrap; padding:0 14px; align-items:center; }
+        .copy-ch-dot {
+            font-size:10px; padding:2px 6px; border-radius:10px; font-weight:600;
+            white-space:nowrap;
+        }
+        .copy-ch-dot.storeB { background:#E8F5E9; color:#2E7D32; }
+        .copy-ch-dot.coupang { background:#FFEBEE; color:#C62828; }
+        .copy-ch-dot.zigzag { background:#FCE4EC; color:#AD1457; }
+        .copy-progress-overlay {
+            position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999;
+            background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center;
+        }
+        .copy-progress-card {
+            background:#fff; border-radius:16px; padding:32px; max-width:480px; width:90%;
+            text-align:center;
+        }
+        .copy-progress-bar {
+            height:6px; background:#E2E8F0; border-radius:3px; overflow:hidden; margin:16px 0;
+        }
+        .copy-progress-fill {
+            height:100%; background:var(--accent); border-radius:3px; transition:width 0.3s;
+        }
+        .copy-history-item {
+            display:flex; align-items:center; gap:12px; padding:8px 0;
+            border-bottom:1px solid var(--border-light); font-size:13px;
+        }
+        .copy-history-item:last-child { border-bottom:none; }
+        .copy-history-channel {
+            font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; flex-shrink:0;
         }
     </style>
 </head>
@@ -1664,6 +1733,10 @@
                 <a href="#brands" class="nav-item">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                     브랜드 관리
+                </a>
+                <a href="#copy" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    상품 복사
                 </a>
 
                 <div class="nav-label" style="margin-top:16px;">시스템</div>
@@ -1986,6 +2059,71 @@
                 <div class="brand-card-grid" id="brandCardGrid"></div>
             </section>
 
+            <!-- ===== PAGE: Product Copy ===== -->
+            <section class="page-section" id="page-copy" style="display:none">
+                <!-- 검색 영역 -->
+                <div class="shell-card" style="margin-bottom:16px;">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <input type="text" id="copySearchInput" class="form-input" placeholder="A 스토어 상품명 검색..."
+                            style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter')searchStoreAProducts()">
+                        <button class="btn btn-accent" onclick="searchStoreAProducts()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                            검색
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 채널 선택 + 복사 버튼 -->
+                <div class="shell-card" style="margin-bottom:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                            <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">복사 대상:</span>
+                            <label class="copy-channel-label">
+                                <input type="checkbox" id="copyTargetStoreB" value="storeB" checked>
+                                <span class="copy-channel-badge" style="--ch-color:#03C75A;">스마트스토어B</span>
+                            </label>
+                            <label class="copy-channel-label">
+                                <input type="checkbox" id="copyTargetCoupang" value="coupang">
+                                <span class="copy-channel-badge" style="--ch-color:#E44232;">쿠팡</span>
+                            </label>
+                            <label class="copy-channel-label">
+                                <input type="checkbox" id="copyTargetZigzag" value="zigzag">
+                                <span class="copy-channel-badge" style="--ch-color:#FF4081;">지그재그</span>
+                            </label>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span id="copySelectedCount" style="font-size:13px;color:var(--text-secondary);">0개 선택</span>
+                            <button class="btn btn-accent" id="copyExecuteBtn" onclick="executeBulkCopy()" disabled>
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                선택 상품 복사
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 검색 결과 -->
+                <div class="shell-card">
+                    <div id="copySearchResults">
+                        <div class="copy-empty-state">
+                            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#CBD5E0" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                            <p style="margin-top:12px;color:var(--text-secondary);">A 스토어 상품을 검색하세요</p>
+                            <p style="font-size:12px;color:#A0AEC0;">상품명으로 검색하면 복사할 수 있는 상품이 표시됩니다</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 복사 이력 -->
+                <div class="shell-card" style="margin-top:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <h3 style="margin:0;font-size:15px;">최근 복사 이력</h3>
+                        <button class="btn btn-outline btn-sm" onclick="loadCopyHistory()">새로고침</button>
+                    </div>
+                    <div id="copyHistoryList">
+                        <p style="text-align:center;color:var(--text-secondary);padding:20px 0;font-size:13px;">페이지 진입 시 자동 로드됩니다</p>
+                    </div>
+                </div>
+            </section>
+
             <!-- ===== PAGE: Settings ===== -->
             <section class="page-section" id="page-settings" style="display:none">
                 <!-- 스마트스토어 연동 -->
@@ -2027,7 +2165,7 @@
 
                         <!-- Coupang -->
                         <div style="margin-bottom:16px;padding:14px;background:var(--bg-primary);border-radius:var(--radius-sm);">
-                            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">쿠팡 Wing (매출 수집)</div>
+                            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">쿠팡 Wing (매출 수집 + 상품 등록)</div>
                             <div class="setting-row">
                                 <label>Access Key</label>
                                 <input type="text" id="coupangAccessKey" placeholder="Access Key 입력">
@@ -2040,6 +2178,22 @@
                                 <label>Vendor ID</label>
                                 <input type="text" id="coupangVendorId" placeholder="예: A00121326">
                             </div>
+                            <div class="setting-row">
+                                <label>카테고리 코드</label>
+                                <input type="text" id="coupangCategoryCode" placeholder="쿠팡 카테고리 코드 (숫자)">
+                            </div>
+                            <div class="setting-row">
+                                <label>출고지 코드</label>
+                                <input type="text" id="coupangOutboundCode" placeholder="출고지 코드 (Outbound)">
+                            </div>
+                            <div class="setting-row">
+                                <label>반품센터 코드</label>
+                                <input type="text" id="coupangReturnCenterCode" placeholder="반품센터 코드">
+                            </div>
+                            <div class="setting-row">
+                                <label>가격 비율</label>
+                                <input type="text" id="coupangPriceRate" placeholder="0.85 (A가격 × 비율)">
+                            </div>
                             <div style="text-align:right;margin-top:8px;">
                                 <button class="btn btn-outline btn-sm" onclick="testCoupangConnection()">연결 테스트</button>
                             </div>
@@ -2047,7 +2201,7 @@
 
                         <!-- Zigzag -->
                         <div style="margin-bottom:16px;padding:14px;background:var(--bg-primary);border-radius:var(--radius-sm);">
-                            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">지그재그 (매출 수집)</div>
+                            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">지그재그 (매출 수집 + 상품 등록)</div>
                             <div class="setting-row">
                                 <label>Access Key</label>
                                 <input type="text" id="zigzagAccessKey" placeholder="Access Key 입력">
@@ -2055,6 +2209,14 @@
                             <div class="setting-row">
                                 <label>Secret Key</label>
                                 <input type="password" id="zigzagSecretKey" placeholder="Secret Key 입력">
+                            </div>
+                            <div class="setting-row">
+                                <label>카테고리 ID</label>
+                                <input type="text" id="zigzagCategoryId" placeholder="지그재그 카테고리 ID">
+                            </div>
+                            <div class="setting-row">
+                                <label>가격 비율</label>
+                                <input type="text" id="zigzagPriceRate" placeholder="0.85 (A가격 × 비율)">
                             </div>
                             <div style="text-align:right;margin-top:8px;">
                                 <button class="btn btn-outline btn-sm" onclick="testZigzagConnection()">연결 테스트</button>
@@ -2324,6 +2486,7 @@
         'sales': '오늘 현황',
         'log': '동기화 로그',
         'brands': '브랜드 관리',
+        'copy': '상품 복사',
         'settings': '설정',
     };
 
@@ -2340,7 +2503,7 @@
         document.getElementById('loginPage').style.display = 'none';
 
         // Valid pages
-        const validPages = ['inventory', 'sales', 'log', 'brands', 'settings'];
+        const validPages = ['inventory', 'sales', 'log', 'brands', 'copy', 'settings'];
         const page = validPages.includes(hash) ? hash : 'inventory';
 
         // Show/hide pages
@@ -2383,6 +2546,9 @@
         }
         if (page === 'log') {
             loadSyncLogs();
+        }
+        if (page === 'copy') {
+            initCopyPage();
         }
     }
 
@@ -3966,9 +4132,15 @@
             document.getElementById('coupangAccessKey').placeholder = config.coupang_access_key || 'Access Key 입력';
             document.getElementById('coupangVendorId').value = config.coupang_vendor_id || '';
             if (config.coupang_access_key) document.getElementById('coupangAccessKey').value = '';
+            document.getElementById('coupangCategoryCode').value = config.coupang_category_code || '';
+            document.getElementById('coupangOutboundCode').value = config.coupang_outbound_code || '';
+            document.getElementById('coupangReturnCenterCode').value = config.coupang_return_center_code || '';
+            document.getElementById('coupangPriceRate').value = config.coupang_price_rate || '0.85';
             // 지그재그
             document.getElementById('zigzagAccessKey').placeholder = config.zigzag_access_key || 'Access Key 입력';
             if (config.zigzag_access_key) document.getElementById('zigzagAccessKey').value = '';
+            document.getElementById('zigzagCategoryId').value = config.zigzag_category_id || '';
+            document.getElementById('zigzagPriceRate').value = config.zigzag_price_rate || '0.85';
 
             // 푸시 알림 상태 확인
             updatePushStatus();
@@ -4030,11 +4202,17 @@
         if (cAccessKey) body.coupang_access_key = cAccessKey;
         if (cSecretKey) body.coupang_secret_key = cSecretKey;
         if (cVendorId) body.coupang_vendor_id = cVendorId;
+        body.coupang_category_code = document.getElementById('coupangCategoryCode').value.trim();
+        body.coupang_outbound_code = document.getElementById('coupangOutboundCode').value.trim();
+        body.coupang_return_center_code = document.getElementById('coupangReturnCenterCode').value.trim();
+        body.coupang_price_rate = document.getElementById('coupangPriceRate').value.trim() || '0.85';
         // 지그재그
         const zAccessKey = document.getElementById('zigzagAccessKey').value.trim();
         const zSecretKey = document.getElementById('zigzagSecretKey').value.trim();
         if (zAccessKey) body.zigzag_access_key = zAccessKey;
         if (zSecretKey) body.zigzag_secret_key = zSecretKey;
+        body.zigzag_category_id = document.getElementById('zigzagCategoryId').value.trim();
+        body.zigzag_price_rate = document.getElementById('zigzagPriceRate').value.trim() || '0.85';
 
         try {
             await api('/api/sync/save-keys', {
@@ -4595,6 +4773,282 @@
     if (screen.orientation && screen.orientation.lock) {
         screen.orientation.lock('portrait-primary').catch(() => {});
     }
+
+    // ===== Product Copy Page =====
+    let copySearchResults = [];
+    let copySelectedIds = new Set();
+
+    function initCopyPage() {
+        loadCopyHistory();
+        updateCopySelectedCount();
+    }
+
+    async function searchStoreAProducts() {
+        const keyword = document.getElementById('copySearchInput').value.trim();
+        if (!keyword) {
+            showToast('검색어를 입력해주세요.', 'warning');
+            return;
+        }
+
+        const container = document.getElementById('copySearchResults');
+        container.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div><p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">A 스토어 상품 검색 중...</p></div>';
+
+        try {
+            const data = await api(`/api/store-a/products/search?keyword=${encodeURIComponent(keyword)}`);
+            copySearchResults = data.items || [];
+            copySelectedIds.clear();
+            renderCopySearchResults();
+            updateCopySelectedCount();
+        } catch (e) {
+            container.innerHTML = `<div class="copy-empty-state"><p style="color:#E53E3E;">검색 실패: ${e.message}</p></div>`;
+        }
+    }
+
+    function renderCopySearchResults() {
+        const container = document.getElementById('copySearchResults');
+        if (copySearchResults.length === 0) {
+            container.innerHTML = '<div class="copy-empty-state"><p style="color:var(--text-secondary);">검색 결과가 없습니다</p></div>';
+            return;
+        }
+
+        let html = `<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;color:var(--text-secondary);">${copySearchResults.length}개 상품</span>
+            <label style="font-size:12px;cursor:pointer;color:var(--accent);font-weight:500;">
+                <input type="checkbox" id="copySelectAll" onchange="toggleCopySelectAll(this.checked)" style="margin-right:4px;accent-color:var(--accent);">
+                전체 선택
+            </label>
+        </div>`;
+        html += '<div class="copy-product-list">';
+
+        for (const item of copySearchResults) {
+            const isSelected = copySelectedIds.has(item.channelProductNo);
+            const imgHtml = item.representativeImage
+                ? `<img src="${item.representativeImage}" alt="" loading="lazy">`
+                : `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#CBD5E0" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
+
+            const priceStr = item.salePrice ? item.salePrice.toLocaleString() + '원' : '-';
+            const stockStr = item.stockQuantity !== undefined ? item.stockQuantity + '개' : '-';
+            const statusStr = item.statusType === 'SALE' ? '판매중' : item.statusType === 'SUSPENSION' ? '판매중지' : (item.statusType || '-');
+
+            // 채널 매핑 현황
+            let channelHtml = '';
+            if (item.storeBProductNo) {
+                channelHtml += '<span class="copy-ch-dot storeB">B등록</span>';
+            }
+            if (item.channelMappings) {
+                for (const m of item.channelMappings) {
+                    if (m.target_product_id && m.copy_status === 'success') {
+                        const label = m.target_channel === 'storeB' ? 'B등록' : m.target_channel === 'coupang' ? '쿠팡' : '지그재그';
+                        const cls = m.target_channel;
+                        channelHtml += `<span class="copy-ch-dot ${cls}">${label}</span>`;
+                    }
+                }
+            }
+
+            html += `<div class="copy-product-card ${isSelected ? 'selected' : ''}" data-id="${item.channelProductNo}" onclick="toggleCopyProduct('${item.channelProductNo}', event)">
+                <div class="copy-product-check">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation();toggleCopyProduct('${item.channelProductNo}', event)">
+                </div>
+                <div class="copy-product-image">${imgHtml}</div>
+                <div class="copy-product-info">
+                    <div class="copy-product-name" title="${(item.name || '').replace(/"/g, '&quot;')}">${item.name || '(이름없음)'}</div>
+                    <div class="copy-product-meta">
+                        <span>${priceStr}</span>
+                        <span>재고 ${stockStr}</span>
+                        <span>${statusStr}</span>
+                    </div>
+                </div>
+                <div class="copy-product-channels">${channelHtml}</div>
+            </div>`;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function toggleCopyProduct(channelProductNo, event) {
+        if (event) event.stopPropagation();
+        if (copySelectedIds.has(channelProductNo)) {
+            copySelectedIds.delete(channelProductNo);
+        } else {
+            copySelectedIds.add(channelProductNo);
+        }
+        renderCopySearchResults();
+        updateCopySelectedCount();
+    }
+
+    function toggleCopySelectAll(checked) {
+        if (checked) {
+            copySearchResults.forEach(item => copySelectedIds.add(item.channelProductNo));
+        } else {
+            copySelectedIds.clear();
+        }
+        renderCopySearchResults();
+        updateCopySelectedCount();
+    }
+
+    function updateCopySelectedCount() {
+        const count = copySelectedIds.size;
+        document.getElementById('copySelectedCount').textContent = `${count}개 선택`;
+        document.getElementById('copyExecuteBtn').disabled = count === 0;
+    }
+
+    function getSelectedCopyTargets() {
+        const targets = [];
+        if (document.getElementById('copyTargetStoreB').checked) targets.push('storeB');
+        if (document.getElementById('copyTargetCoupang').checked) targets.push('coupang');
+        if (document.getElementById('copyTargetZigzag').checked) targets.push('zigzag');
+        return targets;
+    }
+
+    async function executeBulkCopy() {
+        const targets = getSelectedCopyTargets();
+        if (targets.length === 0) {
+            showToast('복사 대상 채널을 선택해주세요.', 'warning');
+            return;
+        }
+        const products = Array.from(copySelectedIds);
+        if (products.length === 0) {
+            showToast('복사할 상품을 선택해주세요.', 'warning');
+            return;
+        }
+
+        const targetLabels = targets.map(t => t === 'storeB' ? '스마트스토어B' : t === 'coupang' ? '쿠팡' : '지그재그');
+        const confirmed = confirm(`${products.length}개 상품을 ${targetLabels.join(', ')}에 복사합니다.\n계속하시겠습니까?`);
+        if (!confirmed) return;
+
+        // 진행 상태 오버레이 표시
+        showCopyProgress(0, products.length);
+
+        try {
+            const data = await api('/api/products/copy-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ products, targets }),
+            });
+
+            hideCopyProgress();
+
+            const summary = data.summary || {};
+            const msg = `복사 완료: 성공 ${summary.success || 0}건, 실패 ${summary.failed || 0}건`;
+            showToast(msg, summary.failed > 0 ? 'warning' : 'success');
+
+            // 결과 상세 표시
+            if (data.details) {
+                showCopyResultModal(data.details, targets);
+            }
+
+            // 검색 결과 갱신 (매핑 정보 업데이트)
+            searchStoreAProducts();
+            loadCopyHistory();
+
+        } catch (e) {
+            hideCopyProgress();
+            showToast('복사 실패: ' + e.message, 'error');
+        }
+    }
+
+    function showCopyProgress(current, total) {
+        let overlay = document.getElementById('copyProgressOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'copyProgressOverlay';
+            overlay.className = 'copy-progress-overlay';
+            document.body.appendChild(overlay);
+        }
+        const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+        overlay.innerHTML = `<div class="copy-progress-card">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--accent)" stroke-width="2" style="animation:spin 1s linear infinite"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            <h3 style="margin:16px 0 8px;">상품 복사 중...</h3>
+            <p style="font-size:13px;color:var(--text-secondary);">잠시만 기다려주세요</p>
+            <div class="copy-progress-bar"><div class="copy-progress-fill" style="width:${pct}%"></div></div>
+            <span style="font-size:12px;color:var(--text-secondary);">${current} / ${total}</span>
+        </div>`;
+        overlay.style.display = 'flex';
+    }
+
+    function hideCopyProgress() {
+        const overlay = document.getElementById('copyProgressOverlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function showCopyResultModal(details, targets) {
+        let overlay = document.getElementById('copyResultOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'copyResultOverlay';
+            overlay.className = 'copy-progress-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
+            document.body.appendChild(overlay);
+        }
+
+        let html = `<div class="copy-progress-card" style="text-align:left;max-height:80vh;overflow-y:auto;">
+            <h3 style="margin:0 0 16px;text-align:center;">복사 결과</h3>
+            <div style="display:flex;flex-direction:column;gap:8px;">`;
+
+        for (const item of details) {
+            const src = item.source || {};
+            const productName = src.productName || src.channelProductNo || '알 수 없음';
+            const results = item.results || {};
+
+            html += `<div style="border:1px solid var(--border-light);border-radius:8px;padding:10px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${productName}</div>`;
+
+            if (item.error) {
+                html += `<div style="font-size:12px;color:#E53E3E;">오류: ${item.error}</div>`;
+            } else {
+                for (const [ch, result] of Object.entries(results)) {
+                    const label = ch === 'storeB' ? '스마트스토어B' : ch === 'coupang' ? '쿠팡' : '지그재그';
+                    const color = result.success ? (result.skipped ? '#805AD5' : '#38A169') : '#E53E3E';
+                    const icon = result.success ? (result.skipped ? '⏭' : '✓') : '✗';
+                    const msg = result.success
+                        ? (result.skipped ? result.message : `등록 완료 (${result.targetProductId || ''})`)
+                        : (result.error || '실패');
+                    html += `<div style="font-size:12px;color:${color};display:flex;gap:4px;align-items:center;">
+                        <span>${icon}</span><strong>${label}</strong>: ${msg}
+                    </div>`;
+                }
+            }
+            html += '</div>';
+        }
+
+        html += '</div><div style="text-align:center;margin-top:16px;"><button class="btn btn-accent btn-sm" onclick="document.getElementById(\'copyResultOverlay\').style.display=\'none\'">확인</button></div></div>';
+        overlay.innerHTML = html;
+        overlay.style.display = 'flex';
+    }
+
+    async function loadCopyHistory() {
+        const container = document.getElementById('copyHistoryList');
+        try {
+            const data = await api('/api/products/copy-history?limit=20');
+            const items = data.items || [];
+            if (items.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px 0;font-size:13px;">복사 이력이 없습니다</p>';
+                return;
+            }
+
+            let html = '';
+            for (const item of items) {
+                const ch = item.target_channel;
+                const label = ch === 'storeB' ? '스마트스토어B' : ch === 'coupang' ? '쿠팡' : ch === 'zigzag' ? '지그재그' : ch;
+                const bgColor = ch === 'storeB' ? '#E8F5E9' : ch === 'coupang' ? '#FFEBEE' : ch === 'zigzag' ? '#FCE4EC' : '#F3F4F6';
+                const fgColor = ch === 'storeB' ? '#2E7D32' : ch === 'coupang' ? '#C62828' : ch === 'zigzag' ? '#AD1457' : '#666';
+                const statusIcon = item.copy_status === 'success' ? '✓' : item.copy_status === 'pending' ? '⏳' : '✗';
+                const statusColor = item.copy_status === 'success' ? '#38A169' : item.copy_status === 'pending' ? '#D69E2E' : '#E53E3E';
+                const timeStr = item.updated_at ? new Date(item.updated_at).toLocaleString('ko-KR') : '-';
+
+                html += `<div class="copy-history-item">
+                    <span class="copy-history-channel" style="background:${bgColor};color:${fgColor};">${label}</span>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(item.store_a_product_name||'').replace(/"/g,'&quot;')}">${item.store_a_product_name || item.store_a_channel_product_no}</span>
+                    <span style="color:${statusColor};font-weight:600;font-size:12px;">${statusIcon}</span>
+                    <span style="color:var(--text-secondary);font-size:11px;flex-shrink:0;">${timeStr}</span>
+                </div>`;
+            }
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = `<p style="text-align:center;color:#E53E3E;padding:20px 0;font-size:13px;">${e.message}</p>`;
+        }
+    }
+
     </script>
 
 </body>
