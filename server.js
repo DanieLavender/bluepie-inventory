@@ -80,15 +80,16 @@ async function runProductIndexing(fullRefresh = false) {
       }
     }
 
-    // Step 2: v1으로 전체 상품번호 수집
-    console.log('[Index] 상품번호 수집 시작...');
-    const allNos = await scheduler.storeA.getAllProductNumbers();
-    console.log(`[Index] 상품번호 ${allNos.length}개`);
+    // Step 2: v1 리스트로 상품번호 + 기본정보 일괄 수집 (v2 개별 호출 불필요)
+    console.log('[Index] 상품 리스트 수집 시작...');
+    const allProducts = await scheduler.storeA.getAllProductsFromList();
+    console.log(`[Index] 상품 ${allProducts.length}개 수집 완료`);
 
     // 이미 인덱싱된 상품 제외
     const existingRows = await query('SELECT channel_product_no FROM store_a_products');
     const existingSet = new Set(existingRows.map(r => r.channel_product_no));
-    const newNos = allNos.filter(no => !existingSet.has(no));
+    const allNos = allProducts.map(p => p.channelProductNo);
+    const newProducts = allProducts.filter(p => !existingSet.has(p.channelProductNo));
 
     // DB에 있지만 API에 없는 상품 삭제 (삭제된 상품 정리)
     const apiSet = new Set(allNos);
@@ -99,41 +100,46 @@ async function runProductIndexing(fullRefresh = false) {
       console.log(`[Index] 삭제된 상품 정리: ${deletedNos.length}건`);
     }
 
-    console.log(`[Index] 신규 ${newNos.length}개 (기존 ${existingSet.size}개)`);
+    console.log(`[Index] 신규 ${newProducts.length}개 (기존 ${existingSet.size}개)`);
 
-    if (newNos.length === 0) {
+    if (newProducts.length === 0) {
       console.log('[Index] 인덱싱할 신규 상품 없음');
       indexingActive = false;
       return;
     }
 
-    indexingProgress.total = newNos.length;
+    indexingProgress.total = newProducts.length;
     indexingProgress.phase = 'indexing';
 
-    // Step 3: 1건씩 v2 조회 → DB 저장 (1초 간격, rate limit 방지)
-    for (let i = 0; i < newNos.length; i++) {
-      if (!indexingActive) break; // 중지 요청 시
+    // Step 3: 리스트에서 가져온 데이터를 일괄 DB 저장 (50건씩 배치)
+    const batchSize = 50;
+    for (let i = 0; i < newProducts.length; i += batchSize) {
+      if (!indexingActive) break;
+
+      const batch = newProducts.slice(i, i + batchSize);
+      const values = [];
+      const placeholders = [];
+
+      for (const info of batch) {
+        placeholders.push('(?, ?, ?, ?, 0, ?, ?, NOW())');
+        values.push(info.channelProductNo, info.originProductNo, info.name, info.salePrice, info.statusType, info.imageUrl);
+      }
 
       try {
-        const detail = await scheduler.storeA.getChannelProduct(newNos[i]);
-        const info = extractProductInfo(detail, newNos[i]);
-
         await query(
           `INSERT INTO store_a_products (channel_product_no, origin_product_no, name, sale_price, stock_quantity, status_type, image_url, indexed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-           ON DUPLICATE KEY UPDATE name=VALUES(name), sale_price=VALUES(sale_price), stock_quantity=VALUES(stock_quantity), status_type=VALUES(status_type), image_url=VALUES(image_url), indexed_at=NOW()`,
-          [info.channelProductNo, info.originProductNo, info.name, info.salePrice, info.stockQuantity, info.statusType, info.imageUrl]
+           VALUES ${placeholders.join(', ')}
+           ON DUPLICATE KEY UPDATE name=VALUES(name), sale_price=VALUES(sale_price), status_type=VALUES(status_type), image_url=VALUES(image_url), indexed_at=NOW()`,
+          values
         );
       } catch (e) {
-        console.log(`[Index] ${newNos[i]} 오류:`, e.message.slice(0, 80));
+        console.log(`[Index] 배치 오류 (${i}~${i + batch.length}):`, e.message.slice(0, 100));
       }
 
-      indexingProgress.current = i + 1;
-      if ((i + 1) % 100 === 0) {
-        console.log(`[Index] 진행: ${i + 1}/${newNos.length}`);
+      indexingProgress.current = Math.min(i + batchSize, newProducts.length);
+      if (indexingProgress.current % 200 === 0 || indexingProgress.current === newProducts.length) {
+        console.log(`[Index] 진행: ${indexingProgress.current}/${newProducts.length}`);
       }
-
-      await new Promise(r => setTimeout(r, 1000)); // 1초 대기
     }
 
     console.log(`[Index] 완료: ${indexingProgress.current}건 인덱싱됨`);

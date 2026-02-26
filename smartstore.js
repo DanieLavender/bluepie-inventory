@@ -252,6 +252,45 @@ class NaverCommerceClient {
   }
 
   /**
+   * v1 리스트 API로 상품번호 + 기본 정보(이름/가격/이미지/상태) 일괄 조회
+   * v2 개별 호출 없이 리스트만으로 인덱싱 데이터 수집
+   * @returns {Array<Object>} { channelProductNo, originProductNo, name, salePrice, imageUrl, statusType }
+   */
+  async getAllProductsFromList() {
+    const allProducts = [];
+    let page = 1;
+    const size = 100;
+
+    do {
+      const data = await this.apiCall('POST', '/v1/products/search', { page, size });
+      if (!data || !data.contents || data.contents.length === 0) break;
+
+      for (const p of data.contents) {
+        const cp = p.channelProducts && p.channelProducts[0];
+        const channelProductNo = String((cp && cp.channelProductNo) || p.originProductNo || '');
+        if (!channelProductNo) continue;
+
+        // v1 응답에서 기본 정보 추출
+        const name = (cp && cp.name) || p.name || '';
+        const salePrice = (cp && cp.salePrice) || p.salePrice || 0;
+        const imageUrl = (cp && cp.representativeImage && cp.representativeImage.url)
+          || (p.images && p.images.representativeImage && p.images.representativeImage.url)
+          || '';
+        const statusType = (cp && cp.statusType) || p.statusType || '';
+        const originProductNo = String(p.originProductNo || '');
+
+        allProducts.push({ channelProductNo, originProductNo, name, salePrice, imageUrl, statusType });
+      }
+
+      if (data.contents.length < size) break;
+      page++;
+      await this.sleep(300);
+    } while (true);
+
+    return allProducts;
+  }
+
+  /**
    * Get channel product detail
    * @param {string} channelProductNo
    * @returns {Object} product detail
