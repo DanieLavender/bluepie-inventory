@@ -5056,14 +5056,8 @@
         try {
             await api('/api/store-a/products/index-start', { method: 'POST' });
             showToast('상품 인덱싱을 시작했습니다. 백그라운드에서 진행됩니다.', 'info');
-            // 진행 상황 폴링
-            const poll = setInterval(async () => {
-                const st = await checkIndexStatus();
-                if (!st || !st.indexing) {
-                    clearInterval(poll);
-                    showToast(`인덱싱 완료: ${st ? st.indexed : '?'}개`, 'success');
-                }
-            }, 5000);
+            await checkIndexStatus();
+            startIndexPolling();
         } catch (e) {
             showToast('인덱싱 시작 실패: ' + e.message, 'error');
         }
@@ -5079,10 +5073,23 @@
         }
     }
 
-    function initCopyPage() {
+    let indexPollTimer = null;
+    function startIndexPolling() {
+        if (indexPollTimer) return;
+        indexPollTimer = setInterval(async () => {
+            const st = await checkIndexStatus();
+            if (!st || !st.indexing) {
+                clearInterval(indexPollTimer);
+                indexPollTimer = null;
+            }
+        }, 3000);
+    }
+
+    async function initCopyPage() {
         loadCopyHistory();
         updateCopySelectedCount();
-        checkIndexStatus();
+        const st = await checkIndexStatus();
+        if (st && st.indexing) startIndexPolling();
     }
 
     async function searchStoreAProducts() {
