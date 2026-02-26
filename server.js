@@ -14,114 +14,37 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Store A 상품 캐시 (v1 목록 데이터 기반) ---
-const storeACache = {
-  products: [],       // v1 raw 데이터에서 추출한 상품 정보
-  fieldMap: null,     // v1 응답 필드명 매핑 (자동 탐지)
-  lastLoadTime: 0,
-  loading: false,
-  error: null,
-};
-const CACHE_TTL = 30 * 60 * 1000; // 30분
+// --- Store A 상품 검색 헬퍼 ---
+// v2 상세 응답에서 표시용 정보 추출
+function extractProductInfo(v2Detail, channelProductNo) {
+  const origin = v2Detail.originProduct || {};
+  const channel = v2Detail.smartstoreChannelProduct || {};
 
-// v1 raw 상품 객체에서 표시용 정보를 추출 (필드명 자동 탐지)
-function extractFromV1(raw) {
-  // channelProductNo 추출
-  const cpNo = raw.channelProductNo
-    || (raw.channelProducts && raw.channelProducts[0] && raw.channelProducts[0].channelProductNo)
-    || raw.originProductNo
-    || '';
+  const name = channel.channelProductName || origin.name || '';
+  const imgUrl = (origin.images && origin.images.representativeImage && origin.images.representativeImage.url) || '';
 
-  // 상품명: 가능한 모든 필드를 시도
-  const name = raw.name || raw.channelProductName || raw.productName
-    || raw.sellerProductName || raw.originProductName
-    || (raw.channelProducts && raw.channelProducts[0] && raw.channelProducts[0].channelProductName)
-    || '';
-
-  // 이미지: 가능한 모든 구조 시도
-  let imageUrl = '';
-  if (raw.representativeImage) {
-    imageUrl = typeof raw.representativeImage === 'string' ? raw.representativeImage : (raw.representativeImage.url || '');
-  } else if (raw.imageUrl) {
-    imageUrl = raw.imageUrl;
-  }
-
-  // 가격/재고/상태
-  const salePrice = raw.salePrice || raw.price || raw.discountedPrice || 0;
-  const stockQuantity = raw.stockQuantity !== undefined ? raw.stockQuantity : (raw.totalStockQuantity || 0);
-  const statusType = raw.statusType || raw.channelProductDisplayStatusType
-    || (raw.channelProducts && raw.channelProducts[0] && raw.channelProducts[0].channelProductDisplayStatusType)
-    || '';
-
-  // 검색용: 모든 문자열 필드를 결합
-  let searchText = '';
-  for (const v of Object.values(raw)) {
-    if (typeof v === 'string' && v.length > 1 && v.length < 500) {
-      searchText += ' ' + v;
-    }
-  }
-  // 하위 객체의 문자열도 포함
-  if (raw.channelProducts && Array.isArray(raw.channelProducts)) {
-    for (const cp of raw.channelProducts) {
-      for (const v of Object.values(cp)) {
-        if (typeof v === 'string' && v.length > 1 && v.length < 500) {
-          searchText += ' ' + v;
-        }
-      }
+  // 실제 판매가 (즉시할인 적용)
+  let salePrice = origin.salePrice || 0;
+  const discount = origin.customerBenefit
+    && origin.customerBenefit.immediateDiscountPolicy
+    && origin.customerBenefit.immediateDiscountPolicy.discountMethod;
+  if (discount) {
+    if (discount.unitType === 'PERCENT') {
+      salePrice = Math.round(origin.salePrice * (1 - discount.value / 100));
+    } else {
+      salePrice = origin.salePrice - (discount.value || 0);
     }
   }
 
   return {
-    channelProductNo: String(cpNo),
-    originProductNo: String(raw.originProductNo || ''),
+    channelProductNo: String(channelProductNo || channel.channelProductNo || ''),
+    originProductNo: String(origin.originProductNo || ''),
     name,
     salePrice,
-    stockQuantity,
-    imageUrl,
-    statusType,
-    _searchText: searchText.toLowerCase(),
+    stockQuantity: origin.stockQuantity || 0,
+    imageUrl: imgUrl,
+    statusType: origin.statusType || channel.channelProductDisplayStatusType || '',
   };
-}
-
-async function loadStoreACache(forceReload = false) {
-  if (storeACache.loading) {
-    // 이미 로딩 중이면 완료 대기
-    await new Promise(resolve => {
-      const check = setInterval(() => {
-        if (!storeACache.loading) { clearInterval(check); resolve(); }
-      }, 500);
-    });
-    return;
-  }
-  if (!forceReload && storeACache.products.length > 0 && Date.now() - storeACache.lastLoadTime < CACHE_TTL) {
-    return; // 캐시 유효
-  }
-
-  storeACache.loading = true;
-  storeACache.error = null;
-  const startTime = Date.now();
-
-  try {
-    await initSyncClients();
-    console.log('[StoreA Cache] v1 상품 목록 로딩 시작...');
-
-    // v1 API로 전체 상품 목록 조회 (페이지네이션, ~41페이지)
-    const rawProducts = await scheduler.storeA.getAllProducts();
-    console.log(`[StoreA Cache] v1 raw ${rawProducts.length}개 조회됨`);
-
-    // 정보 추출 + 캐시 저장
-    storeACache.products = rawProducts.map(extractFromV1);
-    storeACache.lastLoadTime = Date.now();
-
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    const withName = storeACache.products.filter(p => p.name).length;
-    console.log(`[StoreA Cache] 완료: ${storeACache.products.length}개 (이름있음: ${withName}개, ${elapsed}초)`);
-  } catch (e) {
-    storeACache.error = e.message;
-    console.error('[StoreA Cache] 오류:', e.message);
-  } finally {
-    storeACache.loading = false;
-  }
 }
 
 // --- API Routes ---
@@ -1491,102 +1414,84 @@ app.get('/api/returns/confirmed', async (req, res) => {
 
 // --- Product Copy API ---
 
-// GET /api/store-a/products/search - A 스토어 상품 검색 (캐시 기반)
+// GET /api/store-a/products/search - A 스토어 상품 검색
+// 흐름: v1 키워드 검색 → channelProductNo 추출 → v2 상세 조회 (소수만)
 app.get('/api/store-a/products/search', async (req, res) => {
   try {
-    const { keyword, refresh } = req.query;
+    await initSyncClients();
+    const { keyword } = req.query;
     if (!keyword || keyword.trim().length === 0) {
       return res.status(400).json({ error: '검색 키워드를 입력해주세요.' });
     }
 
-    // 캐시 로드 (없거나 만료 시 자동 갱신)
-    await loadStoreACache(refresh === '1');
+    const startTime = Date.now();
 
-    if (storeACache.error && storeACache.products.length === 0) {
-      return res.status(500).json({ error: `상품 목록 로딩 실패: ${storeACache.error}` });
+    // Step 1: v1 API로 키워드 검색 (searchKeywordType: PRODUCT_NAME)
+    const v1Results = await scheduler.storeA.searchProductsByKeyword(keyword.trim());
+    console.log(`[StoreA Search] v1 검색 "${keyword.trim()}": ${v1Results.length}건`);
+
+    if (v1Results.length === 0) {
+      return res.json({ items: [], total: 0 });
     }
 
-    // 키워드로 서버사이드 필터링 (이름 우선, _searchText 폴백)
-    const kw = keyword.trim().toLowerCase();
-    const keywords = kw.split(/\s+/); // 공백 분리 다중 키워드
-    const filtered = storeACache.products.filter(p => {
-      // 이름이 있으면 이름으로 검색, 없으면 모든 문자열 필드에서 검색
-      const target = p.name ? p.name.toLowerCase() : (p._searchText || '');
-      return keywords.every(k => target.includes(k));
-    });
+    // Step 2: channelProductNo 추출
+    const productNos = [];
+    for (const p of v1Results) {
+      const no = p.channelProductNo
+        || (p.channelProducts && p.channelProducts[0] && p.channelProducts[0].channelProductNo)
+        || p.originProductNo;
+      if (no) productNos.push(String(no));
+    }
 
-    // 각 상품에 기존 복사 매핑 정보 추가
+    // 최대 50개로 제한 (v2 호출 수 제한)
+    const limitedNos = productNos.slice(0, 50);
+    console.log(`[StoreA Search] v2 상세 조회: ${limitedNos.length}건`);
+
+    // Step 3: v2 상세 조회 (2건씩 병렬, rate limit 방지)
     const items = [];
-    for (const product of filtered) {
-      let mappings = [];
-      if (product.channelProductNo) {
-        mappings = await query(
-          'SELECT target_channel, target_product_id, copy_status FROM channel_product_mapping WHERE store_a_channel_product_no = ?',
-          [product.channelProductNo]
-        );
-      }
+    for (let i = 0; i < limitedNos.length; i += 2) {
+      const batch = limitedNos.slice(i, i + 2);
+      const results = await Promise.allSettled(
+        batch.map(no => scheduler.storeA.getChannelProduct(no))
+      );
 
-      let storeBMapping = null;
-      if (product.channelProductNo) {
-        const pmRows = await query(
-          'SELECT store_b_channel_product_no FROM product_mapping WHERE store_a_channel_product_no = ? AND match_status = ? LIMIT 1',
-          [product.channelProductNo, 'matched']
-        );
-        if (pmRows.length > 0) {
-          storeBMapping = pmRows[0].store_b_channel_product_no;
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === 'fulfilled' && results[j].value) {
+          const info = extractProductInfo(results[j].value, batch[j]);
+
+          // DB에서 매핑 정보 조회
+          let mappings = [];
+          let storeBMapping = null;
+          if (info.channelProductNo) {
+            mappings = await query(
+              'SELECT target_channel, target_product_id, copy_status FROM channel_product_mapping WHERE store_a_channel_product_no = ?',
+              [info.channelProductNo]
+            );
+            const pmRows = await query(
+              'SELECT store_b_channel_product_no FROM product_mapping WHERE store_a_channel_product_no = ? AND match_status = ? LIMIT 1',
+              [info.channelProductNo, 'matched']
+            );
+            if (pmRows.length > 0) storeBMapping = pmRows[0].store_b_channel_product_no;
+          }
+
+          items.push({
+            ...info,
+            representativeImage: info.imageUrl,
+            channelMappings: mappings,
+            storeBProductNo: storeBMapping,
+          });
         }
       }
 
-      items.push({
-        channelProductNo: product.channelProductNo,
-        originProductNo: product.originProductNo,
-        name: product.name,
-        salePrice: product.salePrice,
-        stockQuantity: product.stockQuantity,
-        statusType: product.statusType,
-        representativeImage: product.imageUrl,
-        channelMappings: mappings,
-        storeBProductNo: storeBMapping,
-      });
+      if (i + 2 < limitedNos.length) await new Promise(r => setTimeout(r, 300));
     }
 
-    res.json({
-      items,
-      total: items.length,
-      cacheInfo: {
-        totalProducts: storeACache.products.length,
-        cachedAt: storeACache.lastLoadTime ? new Date(storeACache.lastLoadTime).toISOString() : null,
-        loading: storeACache.loading,
-      },
-    });
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[StoreA Search] 완료: ${items.length}건 (${elapsed}초)`);
+
+    res.json({ items, total: items.length });
   } catch (e) {
     console.error('[StoreA Search] 오류:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// GET /api/store-a/products/cache-status - 캐시 상태 확인
-app.get('/api/store-a/products/cache-status', (req, res) => {
-  res.json({
-    loaded: storeACache.products.length > 0,
-    totalProducts: storeACache.products.length,
-    cachedAt: storeACache.lastLoadTime ? new Date(storeACache.lastLoadTime).toISOString() : null,
-    loading: storeACache.loading,
-    error: storeACache.error,
-    ttlRemaining: storeACache.lastLoadTime ? Math.max(0, CACHE_TTL - (Date.now() - storeACache.lastLoadTime)) : 0,
-  });
-});
-
-// POST /api/store-a/products/cache-refresh - 캐시 수동 갱신
-app.post('/api/store-a/products/cache-refresh', async (req, res) => {
-  try {
-    if (storeACache.loading) {
-      return res.json({ message: '이미 로딩 중입니다.', loading: true });
-    }
-    // 비동기로 갱신 시작
-    loadStoreACache(true).catch(e => console.error('[StoreA Cache] 갱신 오류:', e.message));
-    res.json({ message: '캐시 갱신을 시작했습니다.', loading: true });
-  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -2052,9 +1957,5 @@ async function initZigzagClient() {
       console.log('[Keep-Alive] 14분 간격 self-ping 활성화');
     }
 
-    // A 스토어 상품 캐시 사전 로딩 (백그라운드)
-    setTimeout(() => {
-      loadStoreACache().catch(e => console.log('[StoreA Cache] 사전 로딩 실패:', e.message));
-    }, 5000);
   });
 })();

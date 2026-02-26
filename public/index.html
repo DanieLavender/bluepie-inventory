@@ -4783,25 +4783,9 @@
     let copySearchResults = [];
     let copySelectedIds = new Set();
 
-    async function refreshStoreACache() {
-        showToast('상품 목록을 새로 가져오는 중...', 'info');
-        try {
-            await api('/api/store-a/products/cache-refresh', { method: 'POST' });
-            // 캐시 로딩 완료 대기 (폴링)
-            let tries = 0;
-            while (tries < 60) {
-                await new Promise(r => setTimeout(r, 2000));
-                const st = await api('/api/store-a/products/cache-status');
-                if (!st.loading) {
-                    showToast(`상품 목록 갱신 완료 (${st.totalProducts}개)`, 'success');
-                    return;
-                }
-                tries++;
-            }
-            showToast('상품 목록 갱신 시간 초과', 'warning');
-        } catch (e) {
-            showToast('갱신 실패: ' + e.message, 'error');
-        }
+    function refreshStoreACache() {
+        // 캐시 없이 직접 검색 방식 — 새로고침 = 재검색
+        searchStoreAProducts();
     }
 
     function initCopyPage() {
@@ -4817,37 +4801,20 @@
         }
 
         const container = document.getElementById('copySearchResults');
-
-        // 캐시 상태 확인하여 안내 메시지 표시
-        let cacheStatus;
-        try { cacheStatus = await api('/api/store-a/products/cache-status'); } catch(e) { cacheStatus = { loaded: false }; }
-
-        if (!cacheStatus.loaded && !cacheStatus.loading) {
-            container.innerHTML = '<div style="text-align:center;padding:40px;">'
-                + '<div class="spinner" style="margin:0 auto;"></div>'
-                + '<p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">A 스토어 상품 목록을 가져오는 중...</p>'
-                + '<p style="margin-top:4px;color:var(--text-tertiary);font-size:12px;">첫 검색 시 30초~1분 소요됩니다</p>'
-                + '</div>';
-        } else {
-            container.innerHTML = '<div style="text-align:center;padding:40px;">'
-                + '<div class="spinner" style="margin:0 auto;"></div>'
-                + '<p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">검색 중...</p>'
-                + '</div>';
-        }
+        container.innerHTML = '<div style="text-align:center;padding:40px;">'
+            + '<div class="spinner" style="margin:0 auto;"></div>'
+            + '<p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">A 스토어에서 검색 중...</p>'
+            + '</div>';
 
         try {
             const data = await api(`/api/store-a/products/search?keyword=${encodeURIComponent(keyword)}`);
             copySearchResults = data.items || [];
             copySelectedIds.clear();
 
-            // 캐시 정보 표시
-            const ci = data.cacheInfo;
             const infoEl = document.getElementById('copyCacheInfo');
-            if (ci && infoEl) {
-                const cachedAt = ci.cachedAt ? new Date(ci.cachedAt) : null;
-                const timeStr = cachedAt ? cachedAt.toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'}) : '';
-                infoEl.textContent = `전체 ${ci.totalProducts}개 중 ${copySearchResults.length}개 일치${timeStr ? ' · 캐시 ' + timeStr : ''}`;
-                infoEl.style.display = 'block';
+            if (infoEl) {
+                infoEl.textContent = `검색 결과: ${copySearchResults.length}건`;
+                infoEl.style.display = copySearchResults.length > 0 ? 'block' : 'none';
             }
 
             renderCopySearchResults();
