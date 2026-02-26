@@ -225,14 +225,15 @@ class NaverCommerceClient {
    * @returns {Array} matching products
    */
   /**
-   * v1 상품 목록 API로 전체 상품의 channelProductNo 목록 조회
-   * (v1은 키워드 검색을 지원하지 않음 — 목록 조회만 가능)
-   * @returns {Array} channelProductNo 문자열 배열
+   * v1 상품 목록 API로 전체 상품 raw 데이터 조회 (페이지네이션)
+   * v1은 키워드 검색 미지원 → 전체 조회 후 서버사이드 필터링
+   * @returns {Array} v1 raw 상품 객체 배열
    */
-  async getAllProductNumbers() {
-    const allNos = [];
+  async getAllProducts() {
+    const allProducts = [];
     let page = 1;
     const size = 100;
+    let logged = false;
 
     do {
       const data = await this.apiCall('POST', '/v1/products/search', {
@@ -241,50 +242,32 @@ class NaverCommerceClient {
       });
       if (!data || !data.contents || data.contents.length === 0) break;
 
+      // 첫 페이지 첫 상품의 필드 구조 로깅 (디버그용)
+      if (!logged && data.contents.length > 0) {
+        const p = data.contents[0];
+        console.log(`[${this.storeName}] v1 상품 필드:`, Object.keys(p).join(', '));
+        // 모든 문자열 필드의 값 샘플 로깅
+        const sample = {};
+        for (const [k, v] of Object.entries(p)) {
+          if (typeof v === 'string') sample[k] = v.slice(0, 80);
+          else if (typeof v === 'number') sample[k] = v;
+          else if (v && typeof v === 'object' && !Array.isArray(v)) sample[k] = Object.keys(v).join(',');
+          else if (Array.isArray(v)) sample[k] = `[${v.length}]`;
+        }
+        console.log(`[${this.storeName}] v1 샘플:`, JSON.stringify(sample).slice(0, 600));
+        logged = true;
+      }
+
       for (const p of data.contents) {
-        const no = p.channelProductNo
-          || (p.channelProducts && p.channelProducts[0] && p.channelProducts[0].channelProductNo)
-          || p.originProductNo;
-        if (no) allNos.push(String(no));
+        allProducts.push(p);
       }
 
       if (data.contents.length < size) break;
       page++;
-      await this.sleep(200);
+      await this.sleep(300);
     } while (true);
 
-    return allNos;
-  }
-
-  /**
-   * v2 채널 상품 상세를 병렬 배치 조회
-   * @param {string[]} channelProductNos
-   * @param {number} concurrency - 동시 요청 수 (기본 5)
-   * @param {function} onProgress - 진행 콜백 (loaded, total)
-   * @returns {Array} v2 상품 상세 배열
-   */
-  async getChannelProductsBatch(channelProductNos, concurrency = 5, onProgress = null) {
-    const results = [];
-
-    for (let i = 0; i < channelProductNos.length; i += concurrency) {
-      const batch = channelProductNos.slice(i, i + concurrency);
-      const settled = await Promise.allSettled(
-        batch.map(no => this.getChannelProduct(no))
-      );
-
-      for (let j = 0; j < settled.length; j++) {
-        if (settled[j].status === 'fulfilled' && settled[j].value) {
-          const detail = settled[j].value;
-          detail._channelProductNo = batch[j]; // 원본 번호 보존
-          results.push(detail);
-        }
-      }
-
-      if (onProgress) onProgress(Math.min(i + concurrency, channelProductNos.length), channelProductNos.length);
-      if (i + concurrency < channelProductNos.length) await this.sleep(150);
-    }
-
-    return results;
+    return allProducts;
   }
 
   /**

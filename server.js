@@ -14,47 +14,72 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Store A 상품 캐시 ---
+// --- Store A 상품 캐시 (v1 목록 데이터 기반) ---
 const storeACache = {
-  products: [],       // { channelProductNo, name, salePrice, stockQuantity, imageUrl, statusType, ... }
+  products: [],       // v1 raw 데이터에서 추출한 상품 정보
+  fieldMap: null,     // v1 응답 필드명 매핑 (자동 탐지)
   lastLoadTime: 0,
   loading: false,
   error: null,
 };
 const CACHE_TTL = 30 * 60 * 1000; // 30분
 
-function extractProductInfo(v2Detail) {
-  const origin = v2Detail.originProduct || {};
-  const channel = v2Detail.smartstoreChannelProduct || {};
-  const cpNo = v2Detail._channelProductNo
-    || channel.channelProductNo
-    || (origin.channelProducts && origin.channelProducts[0] && origin.channelProducts[0].channelProductNo)
-    || String(origin.originProductNo || '');
+// v1 raw 상품 객체에서 표시용 정보를 추출 (필드명 자동 탐지)
+function extractFromV1(raw) {
+  // channelProductNo 추출
+  const cpNo = raw.channelProductNo
+    || (raw.channelProducts && raw.channelProducts[0] && raw.channelProducts[0].channelProductNo)
+    || raw.originProductNo
+    || '';
 
-  const name = channel.channelProductName || origin.name || '';
-  const imgUrl = (origin.images && origin.images.representativeImage && origin.images.representativeImage.url) || '';
+  // 상품명: 가능한 모든 필드를 시도
+  const name = raw.name || raw.channelProductName || raw.productName
+    || raw.sellerProductName || raw.originProductName
+    || (raw.channelProducts && raw.channelProducts[0] && raw.channelProducts[0].channelProductName)
+    || '';
 
-  // 실제 판매가 계산 (즉시할인 적용)
-  let salePrice = origin.salePrice || 0;
-  const discount = origin.customerBenefit
-    && origin.customerBenefit.immediateDiscountPolicy
-    && origin.customerBenefit.immediateDiscountPolicy.discountMethod;
-  if (discount) {
-    if (discount.unitType === 'PERCENT') {
-      salePrice = Math.round(origin.salePrice * (1 - discount.value / 100));
-    } else {
-      salePrice = origin.salePrice - (discount.value || 0);
+  // 이미지: 가능한 모든 구조 시도
+  let imageUrl = '';
+  if (raw.representativeImage) {
+    imageUrl = typeof raw.representativeImage === 'string' ? raw.representativeImage : (raw.representativeImage.url || '');
+  } else if (raw.imageUrl) {
+    imageUrl = raw.imageUrl;
+  }
+
+  // 가격/재고/상태
+  const salePrice = raw.salePrice || raw.price || raw.discountedPrice || 0;
+  const stockQuantity = raw.stockQuantity !== undefined ? raw.stockQuantity : (raw.totalStockQuantity || 0);
+  const statusType = raw.statusType || raw.channelProductDisplayStatusType
+    || (raw.channelProducts && raw.channelProducts[0] && raw.channelProducts[0].channelProductDisplayStatusType)
+    || '';
+
+  // 검색용: 모든 문자열 필드를 결합
+  let searchText = '';
+  for (const v of Object.values(raw)) {
+    if (typeof v === 'string' && v.length > 1 && v.length < 500) {
+      searchText += ' ' + v;
+    }
+  }
+  // 하위 객체의 문자열도 포함
+  if (raw.channelProducts && Array.isArray(raw.channelProducts)) {
+    for (const cp of raw.channelProducts) {
+      for (const v of Object.values(cp)) {
+        if (typeof v === 'string' && v.length > 1 && v.length < 500) {
+          searchText += ' ' + v;
+        }
+      }
     }
   }
 
   return {
     channelProductNo: String(cpNo),
-    originProductNo: String(origin.originProductNo || ''),
+    originProductNo: String(raw.originProductNo || ''),
     name,
     salePrice,
-    stockQuantity: origin.stockQuantity || 0,
-    imageUrl: imgUrl,
-    statusType: origin.statusType || channel.channelProductDisplayStatusType || '',
+    stockQuantity,
+    imageUrl,
+    statusType,
+    _searchText: searchText.toLowerCase(),
   };
 }
 
@@ -78,31 +103,19 @@ async function loadStoreACache(forceReload = false) {
 
   try {
     await initSyncClients();
-    console.log('[StoreA Cache] 상품 목록 로딩 시작...');
+    console.log('[StoreA Cache] v1 상품 목록 로딩 시작...');
 
-    // Step 1: v1 API로 전체 상품번호 목록 조회
-    const productNos = await scheduler.storeA.getAllProductNumbers();
-    console.log(`[StoreA Cache] 상품번호 ${productNos.length}개 조회됨`);
+    // v1 API로 전체 상품 목록 조회 (페이지네이션, ~41페이지)
+    const rawProducts = await scheduler.storeA.getAllProducts();
+    console.log(`[StoreA Cache] v1 raw ${rawProducts.length}개 조회됨`);
 
-    if (productNos.length === 0) {
-      storeACache.products = [];
-      storeACache.lastLoadTime = Date.now();
-      return;
-    }
-
-    // Step 2: v2 API로 상세정보 병렬 조회
-    const details = await scheduler.storeA.getChannelProductsBatch(productNos, 5, (loaded, total) => {
-      if (loaded % 20 === 0 || loaded === total) {
-        console.log(`[StoreA Cache] 상세 조회 ${loaded}/${total}`);
-      }
-    });
-
-    // Step 3: 정보 추출 + 캐시 저장
-    storeACache.products = details.map(extractProductInfo);
+    // 정보 추출 + 캐시 저장
+    storeACache.products = rawProducts.map(extractFromV1);
     storeACache.lastLoadTime = Date.now();
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[StoreA Cache] 완료: ${storeACache.products.length}개 상품 (${elapsed}초)`);
+    const withName = storeACache.products.filter(p => p.name).length;
+    console.log(`[StoreA Cache] 완료: ${storeACache.products.length}개 (이름있음: ${withName}개, ${elapsed}초)`);
   } catch (e) {
     storeACache.error = e.message;
     console.error('[StoreA Cache] 오류:', e.message);
@@ -1493,11 +1506,12 @@ app.get('/api/store-a/products/search', async (req, res) => {
       return res.status(500).json({ error: `상품 목록 로딩 실패: ${storeACache.error}` });
     }
 
-    // 키워드로 서버사이드 필터링
+    // 키워드로 서버사이드 필터링 (이름 우선, _searchText 폴백)
     const kw = keyword.trim().toLowerCase();
     const keywords = kw.split(/\s+/); // 공백 분리 다중 키워드
     const filtered = storeACache.products.filter(p => {
-      const target = (p.name || '').toLowerCase();
+      // 이름이 있으면 이름으로 검색, 없으면 모든 문자열 필드에서 검색
+      const target = p.name ? p.name.toLowerCase() : (p._searchText || '');
       return keywords.every(k => target.includes(k));
     });
 
