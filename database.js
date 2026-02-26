@@ -341,6 +341,61 @@ async function initDb() {
     console.log(`[DB] channel_products 이관 완료: ${chCount[0].cnt}개`);
   }
 
+  // === 통합 상품 테이블 (master_products + channel_products → products) ===
+  await query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sku VARCHAR(20) UNIQUE NOT NULL,
+      name VARCHAR(500) NOT NULL,
+      brand VARCHAR(10) DEFAULT '',
+      supplier VARCHAR(50) DEFAULT '',
+      color VARCHAR(255) DEFAULT '',
+      size VARCHAR(255) DEFAULT NULL,
+      sale_price INT DEFAULT 0,
+      qty INT NOT NULL DEFAULT 0,
+      stock_type ENUM('inventory', 'sourcing') DEFAULT 'sourcing',
+      image_url TEXT,
+      naver_a_no VARCHAR(255) DEFAULT NULL,
+      naver_b_no VARCHAR(255) DEFAULT NULL,
+      coupang_no VARCHAR(255) DEFAULT NULL,
+      zigzag_no VARCHAR(255) DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT NULL,
+      INDEX idx_naver_a (naver_a_no)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // === 마이그레이션: master_products + channel_products → products (1회성) ===
+  const [productsMigrated] = await getPool().query(
+    "SELECT value FROM sync_config WHERE `key` = 'products_table_migrated'"
+  ).catch(() => [[]]);
+  if (!productsMigrated || productsMigrated.length === 0 || productsMigrated[0]?.value !== 'true') {
+    await query("DELETE FROM products").catch(() => {});
+    const mpCount = await query('SELECT COUNT(*) as cnt FROM master_products').catch(() => [{ cnt: 0 }]);
+    if (mpCount[0].cnt > 0) {
+      await query(`
+        INSERT INTO products (sku, name, brand, supplier, color, size, sale_price, qty, stock_type, image_url,
+          naver_a_no, naver_b_no, coupang_no, zigzag_no, created_at, updated_at)
+        SELECT m.sku, m.name, m.brand, m.supplier, m.color, m.size,
+          COALESCE(MAX(CASE WHEN c.channel='naver_a' THEN c.channel_price END), 0),
+          m.qty, m.stock_type, m.image_url,
+          MAX(CASE WHEN c.channel='naver_a' THEN c.channel_product_id END),
+          MAX(CASE WHEN c.channel='naver_b' THEN c.channel_product_id END),
+          MAX(CASE WHEN c.channel='coupang' THEN c.channel_product_id END),
+          MAX(CASE WHEN c.channel='zigzag' THEN c.channel_product_id END),
+          m.created_at, m.updated_at
+        FROM master_products m
+        LEFT JOIN channel_products c ON c.master_id = m.id
+        GROUP BY m.id
+      `);
+      const pCount = await query('SELECT COUNT(*) as cnt FROM products');
+      console.log(`[DB] products 테이블 이관 완료: ${pCount[0].cnt}개`);
+    }
+    await query(
+      "INSERT INTO sync_config (`key`, value) VALUES ('products_table_migrated', 'true') ON DUPLICATE KEY UPDATE value = 'true'"
+    );
+  }
+
   // Seed sync_config defaults
   const configDefaults = [
     ['sync_enabled', 'false'],

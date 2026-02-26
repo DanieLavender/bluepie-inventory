@@ -158,9 +158,13 @@ function startAutoIndexing() {
   console.log('[Index] 자동 인덱싱 활성화 (6시간 간격)');
 }
 
-// --- 마스터 상품 API (품번 기준 통합 관리) ---
+// --- 상품 API (products 통합 테이블) ---
 
-// GET /api/master/products - 마스터 상품 목록 (채널 배지 포함)
+const channelCols = { naver_a: 'naver_a_no', naver_b: 'naver_b_no', coupang: 'coupang_no', zigzag: 'zigzag_no' };
+const storeToChannel = { A: 'naver_a_no', B: 'naver_b_no', C: 'coupang_no', D: 'zigzag_no' };
+const channelToStore = { naver_a: 'A', naver_b: 'B', coupang: 'C', zigzag: 'D' };
+
+// GET /api/master/products - 상품 목록
 app.get('/api/master/products', async (req, res) => {
   try {
     const { search, brand, stockType, channel, sort, page = 1, limit = 30 } = req.query;
@@ -170,99 +174,69 @@ app.get('/api/master/products', async (req, res) => {
     if (search) {
       const keywords = search.trim().split(/\s+/);
       for (const kw of keywords) {
-        conditions.push('(m.name LIKE ? OR m.color LIKE ? OR m.sku LIKE ?)');
+        conditions.push('(p.name LIKE ? OR p.color LIKE ? OR p.sku LIKE ?)');
         params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`);
       }
     }
-    if (brand) { conditions.push('m.brand = ?'); params.push(brand); }
-    if (stockType) { conditions.push('m.stock_type = ?'); params.push(stockType); }
+    if (brand) { conditions.push('p.brand = ?'); params.push(brand); }
+    if (stockType) { conditions.push('p.stock_type = ?'); params.push(stockType); }
 
-    // 특정 채널에 등록된/안된 상품 필터
     if (channel === 'unlinked') {
-      conditions.push('m.id NOT IN (SELECT master_id FROM channel_products)');
-    } else if (channel) {
-      conditions.push('m.id IN (SELECT master_id FROM channel_products WHERE channel = ?)');
-      params.push(channel);
+      conditions.push('p.naver_a_no IS NULL AND p.naver_b_no IS NULL AND p.coupang_no IS NULL AND p.zigzag_no IS NULL');
+    } else if (channelCols[channel]) {
+      conditions.push(`p.${channelCols[channel]} IS NOT NULL`);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const countRows = await query(`SELECT COUNT(*) as total FROM master_products m ${where}`, params);
+    const countRows = await query(`SELECT COUNT(*) as total FROM products p ${where}`, params);
     const total = countRows[0].total;
 
-    let orderBy = 'm.id ASC';
-    if (sort === 'updated') orderBy = 'm.updated_at DESC';
-    if (sort === 'name') orderBy = 'm.name ASC';
-    if (sort === 'sku') orderBy = 'm.sku ASC';
-    if (sort === 'qty_asc') orderBy = 'm.qty ASC';
-    if (sort === 'qty_desc') orderBy = 'm.qty DESC';
-    if (sort === 'newest') orderBy = 'm.created_at DESC';
-    if (sort === 'oldest') orderBy = 'm.created_at ASC';
+    let orderBy = 'p.id ASC';
+    if (sort === 'updated') orderBy = 'p.updated_at DESC';
+    if (sort === 'name') orderBy = 'p.name ASC';
+    if (sort === 'sku') orderBy = 'p.sku ASC';
+    if (sort === 'qty_asc') orderBy = 'p.qty ASC';
+    if (sort === 'qty_desc') orderBy = 'p.qty DESC';
+    if (sort === 'newest') orderBy = 'p.created_at DESC';
+    if (sort === 'oldest') orderBy = 'p.created_at ASC';
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
     params.push(parseInt(limit), offset);
-    const rows = await query(
-      `SELECT m.* FROM master_products m ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
-      params
-    );
+    const rows = await query(`SELECT * FROM products p ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`, params);
 
-    // 각 상품의 채널 매핑 조회
-    const masterIds = rows.map(r => r.id);
-    let channelMap = {};
-    if (masterIds.length > 0) {
-      const ph = masterIds.map(() => '?').join(',');
-      const chRows = await query(
-        `SELECT master_id, channel, channel_product_id, channel_product_name, channel_price, channel_status
-         FROM channel_products WHERE master_id IN (${ph})`,
-        masterIds
-      );
-      for (const ch of chRows) {
-        if (!channelMap[ch.master_id]) channelMap[ch.master_id] = [];
-        channelMap[ch.master_id].push(ch);
-      }
-    }
-
-    // 각 상품의 매출 데이터 집계 (channel_products → sales_orders 조인)
+    // 매출 데이터 집계
     let salesMap = {};
-    if (masterIds.length > 0) {
-      const ph = masterIds.map(() => '?').join(',');
-      const storeMap = { naver_a: 'A', naver_b: 'B', coupang: 'C', zigzag: 'D' };
-      // channel_products에서 모든 채널 ID 수집
-      const allChannels = [];
-      for (const mid of masterIds) {
-        for (const ch of (channelMap[mid] || [])) {
-          allChannels.push({ masterId: mid, store: storeMap[ch.channel] || '', channelId: ch.channel_product_id });
-        }
+    if (rows.length > 0) {
+      const allPairs = [];
+      const pairToId = {};
+      for (const r of rows) {
+        if (r.naver_a_no) { allPairs.push({ s: 'A', c: r.naver_a_no, id: r.id }); }
+        if (r.naver_b_no) { allPairs.push({ s: 'B', c: r.naver_b_no, id: r.id }); }
+        if (r.coupang_no) { allPairs.push({ s: 'C', c: r.coupang_no, id: r.id }); }
+        if (r.zigzag_no) { allPairs.push({ s: 'D', c: r.zigzag_no, id: r.id }); }
       }
-      if (allChannels.length > 0) {
-        // OR 조건으로 한번에 조회
-        const orConds = allChannels.map(() => '(store = ? AND channel_product_no = ?)');
+      if (allPairs.length > 0) {
+        const orConds = allPairs.map(() => '(store = ? AND channel_product_no = ?)');
         const orParams = [];
-        for (const ac of allChannels) { orParams.push(ac.store, ac.channelId); }
+        for (const p of allPairs) { orParams.push(p.s, p.c); pairToId[`${p.s}_${p.c}`] = p.id; }
         const salesRows = await query(
-          `SELECT store, channel_product_no, SUM(qty) as total_qty, SUM(total_amount) as total_amount, MIN(order_date) as first_order
-           FROM sales_orders WHERE ${orConds.join(' OR ')} GROUP BY store, channel_product_no`,
-          orParams
+          `SELECT store, channel_product_no, SUM(qty) as tq, SUM(total_amount) as ta, MIN(order_date) as fo
+           FROM sales_orders WHERE ${orConds.join(' OR ')} GROUP BY store, channel_product_no`, orParams
         );
-        // channel_product_no → master_id 역매핑
-        const cpToMaster = {};
-        for (const ac of allChannels) { cpToMaster[`${ac.store}_${ac.channelId}`] = ac.masterId; }
         for (const sr of salesRows) {
-          const mid = cpToMaster[`${sr.store}_${sr.channel_product_no}`];
-          if (!mid) continue;
-          if (!salesMap[mid]) salesMap[mid] = { totalQty: 0, totalAmount: 0, firstOrder: null };
-          salesMap[mid].totalQty += Number(sr.total_qty) || 0;
-          salesMap[mid].totalAmount += Number(sr.total_amount) || 0;
-          if (sr.first_order && (!salesMap[mid].firstOrder || sr.first_order < salesMap[mid].firstOrder)) {
-            salesMap[mid].firstOrder = sr.first_order;
-          }
+          const pid = pairToId[`${sr.store}_${sr.channel_product_no}`];
+          if (!pid) continue;
+          if (!salesMap[pid]) salesMap[pid] = { totalQty: 0, totalAmount: 0, firstOrder: null };
+          salesMap[pid].totalQty += Number(sr.tq) || 0;
+          salesMap[pid].totalAmount += Number(sr.ta) || 0;
+          if (sr.fo && (!salesMap[pid].firstOrder || sr.fo < salesMap[pid].firstOrder)) salesMap[pid].firstOrder = sr.fo;
         }
       }
     }
 
     const items = rows.map(r => ({
       ...r,
-      channels: channelMap[r.id] || [],
       sales: salesMap[r.id] || { totalQty: 0, totalAmount: 0, firstOrder: null },
     }));
 
@@ -272,41 +246,43 @@ app.get('/api/master/products', async (req, res) => {
   }
 });
 
-// GET /api/master/products/:id - 마스터 상품 상세 (채널 + 매출 전체 정보)
+// GET /api/master/products/:id - 상품 상세
 app.get('/api/master/products/:id', async (req, res) => {
   try {
-    const rows = await query('SELECT * FROM master_products WHERE id = ?', [req.params.id]);
+    const rows = await query('SELECT * FROM products WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: '상품 없음' });
-    const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
+    const p = rows[0];
 
     // 채널별 매출 집계
-    const storeMap = { naver_a: 'A', naver_b: 'B', coupang: 'C', zigzag: 'D' };
     let sales = { totalQty: 0, totalAmount: 0, firstOrder: null, byChannel: {} };
-    for (const ch of channels) {
-      const store = storeMap[ch.channel];
-      if (!store || !ch.channel_product_id) continue;
+    const pairs = [
+      { ch: 'naver_a', s: 'A', no: p.naver_a_no },
+      { ch: 'naver_b', s: 'B', no: p.naver_b_no },
+      { ch: 'coupang', s: 'C', no: p.coupang_no },
+      { ch: 'zigzag', s: 'D', no: p.zigzag_no },
+    ];
+    for (const { ch, s, no } of pairs) {
+      if (!no) continue;
       const sRows = await query(
         'SELECT SUM(qty) as tq, SUM(total_amount) as ta, MIN(order_date) as fo FROM sales_orders WHERE store = ? AND channel_product_no = ?',
-        [store, ch.channel_product_id]
+        [s, no]
       );
       if (sRows[0] && sRows[0].tq) {
         const chSales = { qty: Number(sRows[0].tq), amount: Number(sRows[0].ta), firstOrder: sRows[0].fo };
         sales.totalQty += chSales.qty;
         sales.totalAmount += chSales.amount;
-        if (chSales.firstOrder && (!sales.firstOrder || chSales.firstOrder < sales.firstOrder)) {
-          sales.firstOrder = chSales.firstOrder;
-        }
-        sales.byChannel[ch.channel] = chSales;
+        if (chSales.firstOrder && (!sales.firstOrder || chSales.firstOrder < sales.firstOrder)) sales.firstOrder = chSales.firstOrder;
+        sales.byChannel[ch] = chSales;
       }
     }
 
-    res.json({ ...rows[0], channels, sales });
+    res.json({ ...p, sales });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// PUT /api/master/products/:id - 마스터 상품 수정
+// PUT /api/master/products/:id - 상품 수정
 app.put('/api/master/products/:id', async (req, res) => {
   try {
     const { name, brand, color, size, qty, stock_type } = req.body;
@@ -320,98 +296,90 @@ app.put('/api/master/products/:id', async (req, res) => {
     if (stock_type !== undefined) { sets.push('stock_type = ?'); params.push(stock_type); }
     if (sets.length === 0) return res.status(400).json({ error: '수정할 필드 없음' });
     params.push(req.params.id);
-    await query(`UPDATE master_products SET ${sets.join(', ')} WHERE id = ?`, params);
-    const rows = await query('SELECT * FROM master_products WHERE id = ?', [req.params.id]);
-    const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
-    res.json({ ...rows[0], channels });
+    await query(`UPDATE products SET ${sets.join(', ')} WHERE id = ?`, params);
+    const rows = await query('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/master/products/:id/link - 마스터 상품에 채널 연결
+// POST /api/master/products/:id/link - 채널 연결
 app.post('/api/master/products/:id/link', async (req, res) => {
   try {
-    const { channel, channel_product_id, channel_product_name, channel_option_name, channel_price, match_type } = req.body;
-    if (!channel || !channel_product_id) return res.status(400).json({ error: 'channel, channel_product_id 필수' });
-    await query(
-      `INSERT INTO channel_products (master_id, channel, channel_product_id, channel_product_name, channel_option_name, channel_price, match_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE master_id = VALUES(master_id), channel_product_name = VALUES(channel_product_name), channel_option_name = VALUES(channel_option_name), channel_price = VALUES(channel_price), match_type = VALUES(match_type), updated_at = NOW()`,
-      [req.params.id, channel, channel_product_id, channel_product_name || '', channel_option_name || '', channel_price || 0, match_type || 'manual']
-    );
-    const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
-    res.json({ success: true, channels });
+    const { channel, channel_product_id } = req.body;
+    const col = channelCols[channel];
+    if (!col || !channel_product_id) return res.status(400).json({ error: 'channel, channel_product_id 필수' });
+    await query(`UPDATE products SET ${col} = ?, updated_at = NOW() WHERE id = ?`, [channel_product_id, req.params.id]);
+    const rows = await query('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    res.json({ success: true, ...rows[0] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// DELETE /api/master/products/:masterId/link/:channelId - 채널 연결 해제
-app.delete('/api/master/products/:masterId/link/:channelId', async (req, res) => {
+// DELETE /api/master/products/:id/link/:channel - 채널 연결 해제
+app.delete('/api/master/products/:id/link/:channel', async (req, res) => {
   try {
-    await query('DELETE FROM channel_products WHERE id = ? AND master_id = ?', [req.params.channelId, req.params.masterId]);
+    const col = channelCols[req.params.channel];
+    if (!col) return res.status(400).json({ error: '유효하지 않은 채널' });
+    await query(`UPDATE products SET ${col} = NULL, updated_at = NOW() WHERE id = ?`, [req.params.id]);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/master/stats - 마스터 상품 통계
+// GET /api/master/stats - 상품 통계
 app.get('/api/master/stats', async (req, res) => {
   try {
-    const [totalRow] = await query('SELECT COUNT(*) as cnt FROM master_products');
-    const [invRow] = await query("SELECT COUNT(*) as cnt FROM master_products WHERE stock_type = 'inventory'");
-    const [srcRow] = await query("SELECT COUNT(*) as cnt FROM master_products WHERE stock_type = 'sourcing'");
-    const [linkedRow] = await query('SELECT COUNT(DISTINCT master_id) as cnt FROM channel_products');
-    const chCounts = await query('SELECT channel, COUNT(*) as cnt FROM channel_products GROUP BY channel');
-    const channelStats = {};
-    for (const r of chCounts) channelStats[r.channel] = r.cnt;
+    const [totalRow] = await query('SELECT COUNT(*) as cnt FROM products');
+    const [invRow] = await query("SELECT COUNT(*) as cnt FROM products WHERE stock_type = 'inventory'");
+    const [srcRow] = await query("SELECT COUNT(*) as cnt FROM products WHERE stock_type = 'sourcing'");
+    const [naRow] = await query('SELECT COUNT(*) as cnt FROM products WHERE naver_a_no IS NOT NULL');
+    const [nbRow] = await query('SELECT COUNT(*) as cnt FROM products WHERE naver_b_no IS NOT NULL');
+    const [cpRow] = await query('SELECT COUNT(*) as cnt FROM products WHERE coupang_no IS NOT NULL');
+    const [zzRow] = await query('SELECT COUNT(*) as cnt FROM products WHERE zigzag_no IS NOT NULL');
+    const [unlinkedRow] = await query('SELECT COUNT(*) as cnt FROM products WHERE naver_a_no IS NULL AND naver_b_no IS NULL AND coupang_no IS NULL AND zigzag_no IS NULL');
     res.json({
       totalProducts: totalRow.cnt,
       inventoryProducts: invRow.cnt,
       sourcingProducts: srcRow.cnt,
-      linkedProducts: linkedRow.cnt,
-      unlinkedProducts: totalRow.cnt - linkedRow.cnt,
-      channelStats,
+      unlinkedProducts: unlinkedRow.cnt,
+      channelStats: { naver_a: naRow.cnt, naver_b: nbRow.cnt, coupang: cpRow.cnt, zigzag: zzRow.cnt },
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/master/next-sku - 다음 품번 조회 (거래처 이니셜 필요)
+// GET /api/master/next-sku - 다음 품번 조회
 app.get('/api/master/next-sku', async (req, res) => {
   try {
     const supplier = (req.query.supplier || 'ETC').toUpperCase();
     const year = new Date().getFullYear();
     const prefix = `${year}${supplier}`;
-    const rows = await query(
-      "SELECT sku FROM master_products WHERE sku LIKE ? ORDER BY sku DESC LIMIT 1",
-      [`${prefix}%`]
-    );
+    const rows = await query("SELECT sku FROM products WHERE sku LIKE ? ORDER BY sku DESC LIMIT 1", [`${prefix}%`]);
     let nextNum = 1;
     if (rows.length > 0) {
       const numPart = rows[0].sku.replace(prefix, '');
       nextNum = parseInt(numPart, 10) + 1;
     }
-    const nextSku = `${prefix}${String(nextNum).padStart(3, '0')}`;
-    res.json({ nextSku });
+    res.json({ nextSku: `${prefix}${String(nextNum).padStart(3, '0')}` });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/master/products - 마스터 상품 추가
+// POST /api/master/products - 상품 추가
 app.post('/api/master/products', async (req, res) => {
   try {
-    const { name, brand, supplier, color, size, qty, stock_type, image_url } = req.body;
+    const { name, brand, supplier, color, size, qty, stock_type, image_url, naver_a_no } = req.body;
     if (!name) return res.status(400).json({ error: '상품명 필수' });
-    // 품번 자동 생성: 연도 + 거래처이니셜 + 순번3자리
     const sup = (supplier || brand || 'ETC').toUpperCase();
     const year = new Date().getFullYear();
     const prefix = `${year}${sup}`;
-    const skuRows = await query("SELECT sku FROM master_products WHERE sku LIKE ? ORDER BY sku DESC LIMIT 1", [`${prefix}%`]);
+    const skuRows = await query("SELECT sku FROM products WHERE sku LIKE ? ORDER BY sku DESC LIMIT 1", [`${prefix}%`]);
     let nextNum = 1;
     if (skuRows.length > 0) {
       const numPart = skuRows[0].sku.replace(prefix, '');
@@ -419,10 +387,10 @@ app.post('/api/master/products', async (req, res) => {
     }
     const sku = `${prefix}${String(nextNum).padStart(3, '0')}`;
     const result = await query(
-      `INSERT INTO master_products (sku, name, brand, supplier, color, size, qty, stock_type, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sku, name, brand || '', sup, color || '', size || null, qty || 0, stock_type || 'sourcing', image_url || null]
+      `INSERT INTO products (sku, name, brand, supplier, color, size, qty, stock_type, image_url, naver_a_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sku, name, brand || '', sup, color || '', size || null, qty || 0, stock_type || 'sourcing', image_url || null, naver_a_no || null]
     );
-    const rows = await query('SELECT * FROM master_products WHERE id = ?', [result.insertId]);
+    const rows = await query('SELECT * FROM products WHERE id = ?', [result.insertId]);
     res.json(rows[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -432,72 +400,51 @@ app.post('/api/master/products', async (req, res) => {
 // POST /api/master/import-from-store-a - A스토어 상품 일괄 등록
 app.post('/api/master/import-from-store-a', async (req, res) => {
   try {
-    // 1. A스토어 인덱싱된 전체 상품
     const storeProducts = await query('SELECT * FROM store_a_products ORDER BY name');
     if (storeProducts.length === 0) {
       return res.json({ created: 0, skipped: 0, message: '인덱싱된 A스토어 상품이 없습니다' });
     }
 
-    // 2. 이미 naver_a로 연결된 channel_product_id 목록
-    const linkedRows = await query("SELECT channel_product_id FROM channel_products WHERE channel = 'naver_a'");
-    const linkedSet = new Set(linkedRows.map(r => r.channel_product_id));
+    // 이미 등록된 naver_a_no 목록
+    const linkedRows = await query("SELECT naver_a_no FROM products WHERE naver_a_no IS NOT NULL");
+    const linkedSet = new Set(linkedRows.map(r => r.naver_a_no));
 
-    // 3. 미연결 상품만 필터
     const toImport = storeProducts.filter(p => !linkedSet.has(p.channel_product_no));
     if (toImport.length === 0) {
       return res.json({ created: 0, skipped: storeProducts.length, message: '모든 상품이 이미 등록되어 있습니다' });
     }
 
-    // 4. 브랜드별 그룹핑 → SKU 일괄 생성
+    // SKU 생성용 supplier별 최대 번호
     const year = new Date().getFullYear();
-    // 각 supplier별 현재 최대 번호 조회
-    const existingSkus = await query("SELECT sku FROM master_products WHERE sku LIKE ?", [`${year}%`]);
+    const existingSkus = await query("SELECT sku FROM products WHERE sku LIKE ?", [`${year}%`]);
     const supplierMax = {};
     for (const row of existingSkus) {
       const match = row.sku.match(/^(\d{4})([A-Z]+)(\d+)$/);
       if (match) {
-        const sup = match[2];
-        const num = parseInt(match[3], 10);
-        supplierMax[sup] = Math.max(supplierMax[sup] || 0, num);
+        supplierMax[match[2]] = Math.max(supplierMax[match[2]] || 0, parseInt(match[3], 10));
       }
     }
 
-    // 5. 일괄 INSERT
     let created = 0;
     for (const p of toImport) {
       const brand = extractBrand(p.name);
       const sup = (brand || 'ETC').toUpperCase();
       supplierMax[sup] = (supplierMax[sup] || 0) + 1;
       const sku = `${year}${sup}${String(supplierMax[sup]).padStart(3, '0')}`;
-
       try {
-        const result = await query(
-          `INSERT INTO master_products (sku, name, brand, supplier, color, size, qty, stock_type, image_url) VALUES (?, ?, ?, ?, ?, ?, 0, 'sourcing', ?)`,
-          [sku, p.name, brand, sup, '', null, p.image_url || null]
-        );
-        // naver_a 채널 자동 연결
         await query(
-          `INSERT INTO channel_products (master_id, channel, channel_product_id, channel_product_name, channel_price, match_type) VALUES (?, 'naver_a', ?, ?, ?, 'auto')
-           ON DUPLICATE KEY UPDATE master_id = VALUES(master_id)`,
-          [result.insertId, p.channel_product_no, p.name, p.sale_price || 0]
+          `INSERT INTO products (sku, name, brand, supplier, sale_price, stock_type, image_url, naver_a_no) VALUES (?, ?, ?, ?, ?, 'sourcing', ?, ?)`,
+          [sku, p.name, brand, sup, p.sale_price || 0, p.image_url || null, p.channel_product_no]
         );
         created++;
       } catch (e) {
-        // SKU 중복 등 개별 오류 무시 (다음 상품 진행)
-        console.log(`[import] ${p.channel_product_no} 등록 실패: ${e.message.slice(0, 100)}`);
+        console.log(`[import] ${p.channel_product_no} 실패: ${e.message.slice(0, 100)}`);
       }
     }
 
-    console.log(`[import] A스토어 → master_products: ${created}건 등록, ${toImport.length - created}건 실패, ${storeProducts.length - toImport.length}건 기존`);
-    res.json({
-      created,
-      skipped: storeProducts.length - toImport.length,
-      failed: toImport.length - created,
-      total: storeProducts.length,
-      message: `${created}건 등록 완료`,
-    });
+    console.log(`[import] A스토어 → products: ${created}건 등록, ${storeProducts.length - toImport.length}건 기존`);
+    res.json({ created, skipped: storeProducts.length - toImport.length, failed: toImport.length - created, total: storeProducts.length, message: `${created}건 등록 완료` });
   } catch (e) {
-    console.error('[import] 오류:', e);
     res.status(500).json({ error: e.message });
   }
 });

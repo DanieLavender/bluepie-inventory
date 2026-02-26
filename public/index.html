@@ -5283,6 +5283,7 @@
     let linkActiveChannel = 'naver_a';
 
     const channelNames = { naver_a: '네이버 A', naver_b: '네이버 B', coupang: '쿠팡', zigzag: '지그재그' };
+    const channelCols = { naver_a: 'naver_a_no', naver_b: 'naver_b_no', coupang: 'coupang_no', zigzag: 'zigzag_no' };
     const allChannelKeys = ['naver_a', 'naver_b', 'coupang', 'zigzag'];
 
     async function openLinkModal(masterId) {
@@ -5303,18 +5304,22 @@
         document.getElementById('linkManualId').onkeydown = (e) => { if (e.key === 'Enter') linkManualProduct(); };
     }
 
+    function getChannelNo(item, key) {
+        return item && item[channelCols[key]] || null;
+    }
+
     function renderCurrentChannels() {
         const container = document.getElementById('linkCurrentChannels');
-        const channels = (linkTargetItem && linkTargetItem.channels) || [];
+        const item = linkTargetItem;
         container.innerHTML = allChannelKeys.map(key => {
             const l = channelLabels[key];
-            const linked = channels.find(c => c.channel === key);
-            if (linked) {
+            const no = getChannelNo(item, key);
+            if (no) {
                 return `<div style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:${l.bg}11;border:1px solid ${l.bg}44;">
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${l.bg};"></span>
                     <span style="font-size:11px;font-weight:600;color:${l.bg};">${channelNames[key]}</span>
-                    <span style="font-size:10px;color:var(--text-tertiary);">#${linked.channel_product_id}</span>
-                    <span onclick="unlinkChannel(${linked.id}, '${key}')" style="cursor:pointer;font-size:12px;color:#999;margin-left:2px;" title="연결 해제">&times;</span>
+                    <span style="font-size:10px;color:var(--text-tertiary);">#${no}</span>
+                    <span onclick="unlinkChannel('${key}')" style="cursor:pointer;font-size:12px;color:#999;margin-left:2px;" title="연결 해제">&times;</span>
                 </div>`;
             } else {
                 return `<div style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:var(--bg-primary);border:1px dashed var(--border);">
@@ -5326,19 +5331,14 @@
 
         // 네이버A 연결 시 복사 영역 표시
         const copyArea = document.getElementById('linkCopyArea');
-        const naverALinked = channels.find(c => c.channel === 'naver_a');
         if (copyArea) {
-            copyArea.style.display = naverALinked ? 'block' : 'none';
-            // 이미 연결된 채널은 체크박스 비활성화 + 체크 해제
-            const bLinked = channels.find(c => c.channel === 'naver_b');
-            const cpLinked = channels.find(c => c.channel === 'coupang');
-            const zzLinked = channels.find(c => c.channel === 'zigzag');
+            copyArea.style.display = getChannelNo(item, 'naver_a') ? 'block' : 'none';
             const cbB = document.getElementById('copyTargetB');
             const cbC = document.getElementById('copyTargetCoupang');
             const cbZ = document.getElementById('copyTargetZigzag');
-            if (cbB) { cbB.disabled = !!bLinked; cbB.checked = !bLinked; }
-            if (cbC) { cbC.disabled = !!cpLinked; cbC.checked = false; }
-            if (cbZ) { cbZ.disabled = !!zzLinked; cbZ.checked = false; }
+            if (cbB) { cbB.disabled = !!getChannelNo(item, 'naver_b'); cbB.checked = !getChannelNo(item, 'naver_b'); }
+            if (cbC) { cbC.disabled = !!getChannelNo(item, 'coupang'); cbC.checked = false; }
+            if (cbZ) { cbZ.disabled = !!getChannelNo(item, 'zigzag'); cbZ.checked = false; }
             const statusEl = document.getElementById('modalCopyStatus');
             if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
         }
@@ -5427,13 +5427,9 @@
                 body: JSON.stringify({
                     channel: linkActiveChannel,
                     channel_product_id: channelProductId,
-                    channel_product_name: channelProductName,
-                    channel_price: channelPrice,
-                    match_type: 'manual',
                 }),
             });
             showToast(`${channelNames[linkActiveChannel]} 상품 연결 완료`, 'success');
-            // 연결 후 상세 갱신
             linkTargetItem = await api(`/api/master/products/${linkTargetMasterId}`);
             renderCurrentChannels();
             loadMasterProducts(masterCurrentPage);
@@ -5450,11 +5446,11 @@
         document.getElementById('linkManualId').value = '';
     }
 
-    async function unlinkChannel(channelRecordId, channelKey) {
+    async function unlinkChannel(channelKey) {
         if (!linkTargetMasterId) return;
         if (!confirm(`${channelNames[channelKey]} 연결을 해제하시겠습니까?`)) return;
         try {
-            await api(`/api/master/products/${linkTargetMasterId}/link/${channelRecordId}`, { method: 'DELETE' });
+            await api(`/api/master/products/${linkTargetMasterId}/link/${channelKey}`, { method: 'DELETE' });
             showToast(`${channelNames[channelKey]} 연결 해제`, 'info');
             linkTargetItem = await api(`/api/master/products/${linkTargetMasterId}`);
             renderCurrentChannels();
@@ -5467,9 +5463,8 @@
 
     async function copyFromModal() {
         if (!linkTargetItem) return;
-        const channels = (linkTargetItem.channels || []);
-        const naverA = channels.find(c => c.channel === 'naver_a');
-        if (!naverA) { showToast('네이버A가 연결되어 있지 않습니다', 'error'); return; }
+        const naverANo = linkTargetItem.naver_a_no;
+        if (!naverANo) { showToast('네이버A가 연결되어 있지 않습니다', 'error'); return; }
 
         const targets = [];
         if (document.getElementById('copyTargetB')?.checked) targets.push('storeB');
@@ -5488,33 +5483,23 @@
             const result = await api('/api/products/copy-bulk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    products: [naverA.channel_product_id],
-                    targets,
-                    options: {},
-                }),
+                body: JSON.stringify({ products: [naverANo], targets, options: {} }),
             });
 
             const detail = result.details && result.details[0];
             const msgs = [];
             if (detail && detail.results) {
+                const chMap = { storeB: 'naver_b', coupang: 'coupang', zigzag: 'zigzag' };
                 for (const [ch, r] of Object.entries(detail.results)) {
                     if (r.success) {
                         msgs.push(`${ch}: 성공`);
-                        // 복사 결과를 channel_products에 자동 연결
-                        const chMap = { storeB: 'naver_b', coupang: 'coupang', zigzag: 'zigzag' };
                         const chKey = chMap[ch];
                         if (chKey && r.targetProductId) {
                             try {
                                 await api(`/api/master/products/${linkTargetMasterId}/link`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        channel: chKey,
-                                        channel_product_id: String(r.targetProductId),
-                                        channel_product_name: r.productName || '',
-                                        match_type: 'copy',
-                                    }),
+                                    body: JSON.stringify({ channel: chKey, channel_product_id: String(r.targetProductId) }),
                                 });
                             } catch (e) { /* 연결 실패해도 복사는 성공 */ }
                         }
@@ -5600,11 +5585,9 @@
 
         if (isMobile) {
             container.innerHTML = data.items.map(item => {
-                const chMap = {};
-                (item.channels || []).forEach(ch => { chMap[ch.channel] = ch; });
                 const channelDots = allChannelKeys.map(key => {
                     const l = channelLabels[key];
-                    const linked = chMap[key];
+                    const linked = item[channelCols[key]];
                     return `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${linked ? l.bg : '#ddd'};line-height:16px;text-align:center;font-size:7px;font-weight:700;color:#fff;">${l.name.charAt(0)}</span>`;
                 }).join('');
                 const stockLabel = item.stock_type === 'inventory'
@@ -5639,13 +5622,11 @@
                         <th style="width:160px;">채널</th>
                     </tr></thead>
                     <tbody>${data.items.map(item => {
-                        const chMap = {};
-                        (item.channels || []).forEach(ch => { chMap[ch.channel] = ch; });
                         const channelDots = allChannelKeys.map(key => {
                             const l = channelLabels[key];
-                            const linked = chMap[key];
-                            const bg = linked ? l.bg : '#ddd';
-                            const title = linked ? `${channelNames[key]}: ${linked.channel_product_name || linked.channel_product_id}` : `${channelNames[key]}: 미연결`;
+                            const no = item[channelCols[key]];
+                            const bg = no ? l.bg : '#ddd';
+                            const title = no ? `${channelNames[key]}: #${no}` : `${channelNames[key]}: 미연결`;
                             return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${bg};line-height:18px;text-align:center;font-size:8px;font-weight:700;color:#fff;cursor:default;" title="${escapeHtml(title)}">${l.name.charAt(0)}</span>`;
                         }).join('');
                         const stockLabel = item.stock_type === 'inventory'
@@ -5832,9 +5813,6 @@
                 body: JSON.stringify({
                     channel: 'naver_a',
                     channel_product_id: channelProductId,
-                    channel_product_name: channelProductName,
-                    channel_price: channelPrice,
-                    match_type: 'manual',
                 }),
             });
             bulkMatched++;
