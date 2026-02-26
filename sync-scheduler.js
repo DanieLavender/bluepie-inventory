@@ -516,7 +516,13 @@ class SyncScheduler {
    * 반품/교환 배송비 적용: B스토어 고정값 우선, 없으면 A스토어 원본 값
    */
   async applyClaimFees(copyData, sourceDelivery) {
+    // deliveryInfo가 없으면 A스토어 배송정보를 기본으로 세팅
+    if (!copyData.originProduct.deliveryInfo && sourceDelivery) {
+      copyData.originProduct.deliveryInfo = JSON.parse(JSON.stringify(sourceDelivery));
+      delete copyData.originProduct.deliveryInfo.deliveryBundleGroupId;
+    }
     if (!copyData.originProduct.deliveryInfo) return;
+
     if (!copyData.originProduct.deliveryInfo.claimDeliveryInfo) {
       copyData.originProduct.deliveryInfo.claimDeliveryInfo = {};
     }
@@ -526,14 +532,14 @@ class SyncScheduler {
     const fixedExchange = await this.getConfig('store_b_exchange_fee');
     const src = sourceDelivery?.claimDeliveryInfo || {};
 
-    // 반품 배송비: 고정값 > A스토어 원본
+    // 반품 배송비 (편도): 고정값 > A스토어 원본
     if (fixedReturn && fixedReturn !== '') {
       dst.returnDeliveryFee = parseInt(fixedReturn, 10);
     } else if (src.returnDeliveryFee != null) {
       dst.returnDeliveryFee = src.returnDeliveryFee;
     }
 
-    // 교환 배송비: 고정값 > A스토어 원본
+    // 교환 배송비 (왕복): 고정값 > A스토어 원본
     if (fixedExchange && fixedExchange !== '') {
       dst.exchangeDeliveryFee = parseInt(fixedExchange, 10);
     } else if (src.exchangeDeliveryFee != null) {
