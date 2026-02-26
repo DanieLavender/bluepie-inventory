@@ -225,13 +225,17 @@ class NaverCommerceClient {
    * @returns {Array} matching products
    */
   async searchProducts(keyword) {
-    const params = new URLSearchParams({
-      searchKeyword: keyword,
-    });
+    // 네이버 커머스 API v2: POST /v2/products/search
+    const body = {
+      searchKeyword: keyword || '',
+      page: 1,
+      size: 100,
+    };
 
     const data = await this.apiCall(
-      'GET',
-      `/v2/products/search?${params}`
+      'POST',
+      '/v2/products/search',
+      body
     );
 
     if (!data || !data.contents) return [];
