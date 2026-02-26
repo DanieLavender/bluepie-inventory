@@ -1462,7 +1462,17 @@ app.get('/api/store-a/products/search', async (req, res) => {
       });
     }
 
-    res.json({ items, total: items.length });
+    // 디버그: 첫 상품 raw 키 포함
+    const debug = results.length > 0 ? {
+      keys: Object.keys(results[0]),
+      sample: JSON.parse(JSON.stringify(results[0], (k, v) => {
+        // 큰 값은 요약
+        if (typeof v === 'string' && v.length > 200) return v.slice(0, 200) + '...';
+        return v;
+      })),
+    } : null;
+
+    res.json({ items, total: items.length, _debug: debug });
   } catch (e) {
     console.error('[StoreA Search] 오류:', e.message);
     res.status(500).json({ error: e.message });
