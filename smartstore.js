@@ -225,7 +225,7 @@ class NaverCommerceClient {
    * @returns {Array} matching products
    */
   async searchProducts(keyword) {
-    // 네이버 커머스 API v2: POST /v2/products/search
+    // 네이버 커머스 API: POST /v1/products/search (v1만 지원)
     const body = {
       searchKeyword: keyword || '',
       page: 1,
@@ -234,7 +234,7 @@ class NaverCommerceClient {
 
     const data = await this.apiCall(
       'POST',
-      '/v2/products/search',
+      '/v1/products/search',
       body
     );
 
