@@ -2264,15 +2264,44 @@
                             <option value="qty_asc">재고 적은순</option>
                         </select>
                         <button onclick="loadMasterProducts()" class="btn btn-accent" style="padding:8px 16px;font-size:13px;">검색</button>
+                        <button onclick="toggleBulkMatch()" id="bulkMatchToggle" class="btn btn-outline" style="padding:8px 16px;font-size:13px;">일괄 매칭</button>
                     </div>
                 </div>
 
-                <!-- 상품 목록 -->
-                <div class="shell-card">
+                <!-- 상품 목록 (기본 뷰) -->
+                <div class="shell-card" id="masterListView">
                     <div id="masterProductList" style="min-height:200px;">
                         <p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:13px;">로딩 중...</p>
                     </div>
                     <div id="masterPagination" style="display:flex;justify-content:center;gap:8px;padding:16px 0;"></div>
+                </div>
+
+                <!-- 일괄 매칭 뷰 -->
+                <div id="bulkMatchView" style="display:none;">
+                    <div class="shell-card" style="margin-bottom:8px;padding:12px 16px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                            <div>
+                                <span style="font-weight:600;font-size:14px;">일괄 매칭 모드</span>
+                                <span id="bulkMatchProgress" style="font-size:12px;color:var(--text-secondary);margin-left:8px;"></span>
+                            </div>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="bulkSearchKeyword" placeholder="A스토어 검색..."
+                                    style="width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;">
+                                <button onclick="bulkSearchStore()" class="btn btn-accent" style="padding:6px 12px;font-size:12px;">검색</button>
+                                <button onclick="bulkSkip()" class="btn btn-outline" style="padding:6px 12px;font-size:12px;">건너뛰기</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 현재 매칭 대상 -->
+                    <div class="shell-card" style="margin-bottom:8px;">
+                        <div id="bulkCurrentItem" style="padding:4px 0;">
+                        </div>
+                    </div>
+                    <!-- A스토어 후보 목록 -->
+                    <div class="shell-card">
+                        <div id="bulkCandidates" style="min-height:200px;max-height:60vh;overflow-y:auto;">
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -5539,6 +5568,183 @@
         if (masterCurrentPage < totalPages) pagHtml += `<button onclick="loadMasterProducts(${masterCurrentPage + 1})" class="btn btn-outline" style="padding:4px 10px;font-size:12px;">다음</button>`;
         pagEl.innerHTML = pagHtml;
     }
+
+    // --- 일괄 매칭 ---
+    let bulkItems = [];        // 미연결 상품 목록
+    let bulkIndex = 0;         // 현재 매칭 중인 인덱스
+    let bulkMatched = 0;       // 이번 세션에서 매칭 완료 수
+    let bulkActive = false;    // 일괄 매칭 모드 활성 여부
+
+    function toggleBulkMatch() {
+        bulkActive = !bulkActive;
+        const listView = document.getElementById('masterListView');
+        const bulkView = document.getElementById('bulkMatchView');
+        const toggleBtn = document.getElementById('bulkMatchToggle');
+
+        if (bulkActive) {
+            listView.style.display = 'none';
+            bulkView.style.display = 'block';
+            toggleBtn.textContent = '목록으로 돌아가기';
+            toggleBtn.classList.remove('btn-outline');
+            toggleBtn.classList.add('btn-accent');
+            startBulkMatch();
+        } else {
+            listView.style.display = '';
+            bulkView.style.display = 'none';
+            toggleBtn.textContent = '일괄 매칭';
+            toggleBtn.classList.remove('btn-accent');
+            toggleBtn.classList.add('btn-outline');
+            bulkItems = [];
+            bulkIndex = 0;
+            loadMasterProducts(masterCurrentPage);
+            loadMasterStats();
+        }
+    }
+
+    async function startBulkMatch() {
+        bulkMatched = 0;
+        bulkIndex = 0;
+        const container = document.getElementById('bulkCurrentItem');
+        const candidates = document.getElementById('bulkCandidates');
+        container.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px 0;font-size:13px;">미연결 상품 로딩 중...</p>';
+        candidates.innerHTML = '';
+
+        try {
+            // 미연결 상품 전체 로드 (channel=unlinked 필터)
+            const data = await api('/api/master/products?channel=unlinked&limit=500');
+            bulkItems = data.items || [];
+            if (bulkItems.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:var(--success);padding:40px 0;font-size:14px;font-weight:600;">모든 상품이 연결되었습니다!</p>';
+                updateBulkProgress();
+                return;
+            }
+            updateBulkProgress();
+            showBulkItem();
+        } catch (e) {
+            container.innerHTML = `<p style="text-align:center;color:#E53E3E;padding:20px 0;">로드 실패: ${e.message}</p>`;
+        }
+    }
+
+    function updateBulkProgress() {
+        const total = bulkItems.length + bulkMatched;
+        const current = bulkIndex + bulkMatched;
+        const remaining = bulkItems.length - bulkIndex;
+        document.getElementById('bulkMatchProgress').textContent =
+            `${bulkMatched}건 연결 · 남은 ${remaining}건 / 전체 ${total}건`;
+    }
+
+    async function showBulkItem() {
+        if (bulkIndex >= bulkItems.length) {
+            document.getElementById('bulkCurrentItem').innerHTML =
+                `<p style="text-align:center;color:var(--success);padding:40px 0;font-size:14px;font-weight:600;">일괄 매칭 완료! (${bulkMatched}건 연결)</p>`;
+            document.getElementById('bulkCandidates').innerHTML = '';
+            return;
+        }
+
+        const item = bulkItems[bulkIndex];
+        const container = document.getElementById('bulkCurrentItem');
+
+        const stockLabel = item.stock_type === 'inventory'
+            ? `<span style="color:#16A34A;font-weight:600;">${item.qty}개</span>`
+            : '<span style="color:#EA580C;">사입</span>';
+
+        container.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <span style="font-size:12px;color:var(--accent);font-weight:700;">${item.sku}</span>
+                    <span style="font-size:14px;font-weight:600;margin-left:8px;">${escapeHtml(item.name)}</span>
+                    <span style="font-size:12px;color:var(--text-secondary);margin-left:8px;">${escapeHtml(item.color || '')}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    ${stockLabel}
+                    <span style="font-size:11px;color:var(--text-tertiary);">${item.supplier || item.brand || ''}</span>
+                </div>
+            </div>`;
+
+        // 자동 키워드 추출 후 A스토어 검색
+        const name = item.name || '';
+        const words = name.replace(/^[a-zA-Z]{2,}\s/, '').replace(/[\[\]()]/g, '').split(/\s+/).filter(w => w.length > 1);
+        const keyword = words.slice(0, 2).join(' ');
+        document.getElementById('bulkSearchKeyword').value = keyword;
+
+        if (keyword) {
+            await bulkSearchStore();
+        } else {
+            document.getElementById('bulkCandidates').innerHTML =
+                '<p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:13px;">검색어를 입력하고 검색 버튼을 눌러주세요</p>';
+        }
+    }
+
+    async function bulkSearchStore() {
+        const keyword = document.getElementById('bulkSearchKeyword').value.trim();
+        if (!keyword) return;
+        const candidates = document.getElementById('bulkCandidates');
+        candidates.innerHTML = '<p style="text-align:center;padding:20px 0;font-size:13px;color:var(--text-tertiary);">검색 중...</p>';
+
+        try {
+            const data = await api(`/api/store-a/products/search?keyword=${encodeURIComponent(keyword)}`);
+            if (!data.items || data.items.length === 0) {
+                candidates.innerHTML = '<p style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-secondary);">검색 결과 없음 — 다른 키워드로 검색하거나 건너뛰기</p>';
+                return;
+            }
+            candidates.innerHTML = data.items.map(p => {
+                const price = p.sale_price ? p.sale_price.toLocaleString() + '원' : '';
+                const status = p.status_type === 'SALE' ? '<span style="color:#16A34A;">판매중</span>'
+                    : p.status_type ? `<span style="color:#EA580C;">${p.status_type}</span>` : '';
+                const safeName = escapeHtml(p.name).replace(/'/g, "\\'");
+                return `<div onclick="bulkLinkProduct('${p.channel_product_no}', '${safeName}', ${p.sale_price || 0})"
+                    style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;"
+                    onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background=''">
+                    <div style="font-size:13px;font-weight:500;margin-bottom:3px;">${escapeHtml(p.name)}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">
+                        ${price} ${status}
+                        <span style="color:var(--text-tertiary);margin-left:8px;">#${p.channel_product_no}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            candidates.innerHTML = `<p style="text-align:center;padding:20px 0;color:#E53E3E;font-size:13px;">${e.message}</p>`;
+        }
+    }
+
+    async function bulkLinkProduct(channelProductId, channelProductName, channelPrice) {
+        const item = bulkItems[bulkIndex];
+        if (!item) return;
+
+        try {
+            await api(`/api/master/products/${item.id}/link`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    channel: 'naver_a',
+                    channel_product_id: channelProductId,
+                    channel_product_name: channelProductName,
+                    channel_price: channelPrice,
+                    match_type: 'manual',
+                }),
+            });
+            bulkMatched++;
+            showToast(`연결 완료: ${item.sku}`, 'success');
+            bulkIndex++;
+            updateBulkProgress();
+            showBulkItem();
+        } catch (e) {
+            showToast('연결 실패: ' + e.message, 'error');
+        }
+    }
+
+    function bulkSkip() {
+        if (bulkIndex >= bulkItems.length) return;
+        bulkIndex++;
+        updateBulkProgress();
+        showBulkItem();
+    }
+
+    // bulkSearchKeyword 엔터키 바인딩
+    document.addEventListener('DOMContentLoaded', () => {
+        const bulkSearchEl = document.getElementById('bulkSearchKeyword');
+        if (bulkSearchEl) bulkSearchEl.onkeydown = (e) => { if (e.key === 'Enter') bulkSearchStore(); };
+    });
 
     async function initCopyPage() {
         loadCopyHistory();
