@@ -158,6 +158,199 @@ function startAutoIndexing() {
   console.log('[Index] 자동 인덱싱 활성화 (6시간 간격)');
 }
 
+// --- 마스터 상품 API (품번 기준 통합 관리) ---
+
+// GET /api/master/products - 마스터 상품 목록 (채널 배지 포함)
+app.get('/api/master/products', async (req, res) => {
+  try {
+    const { search, brand, stockType, channel, sort, page = 1, limit = 30 } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (search) {
+      const keywords = search.trim().split(/\s+/);
+      for (const kw of keywords) {
+        conditions.push('(m.name LIKE ? OR m.color LIKE ? OR m.sku LIKE ?)');
+        params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`);
+      }
+    }
+    if (brand) { conditions.push('m.brand = ?'); params.push(brand); }
+    if (stockType) { conditions.push('m.stock_type = ?'); params.push(stockType); }
+
+    // 특정 채널에 등록된/안된 상품 필터
+    if (channel === 'unlinked') {
+      conditions.push('m.id NOT IN (SELECT master_id FROM channel_products)');
+    } else if (channel) {
+      conditions.push('m.id IN (SELECT master_id FROM channel_products WHERE channel = ?)');
+      params.push(channel);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const countRows = await query(`SELECT COUNT(*) as total FROM master_products m ${where}`, params);
+    const total = countRows[0].total;
+
+    let orderBy = 'm.id ASC';
+    if (sort === 'updated') orderBy = 'm.updated_at DESC';
+    if (sort === 'name') orderBy = 'm.name ASC';
+    if (sort === 'sku') orderBy = 'm.sku ASC';
+    if (sort === 'qty_asc') orderBy = 'm.qty ASC';
+    if (sort === 'qty_desc') orderBy = 'm.qty DESC';
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    params.push(parseInt(limit), offset);
+    const rows = await query(
+      `SELECT m.* FROM master_products m ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+      params
+    );
+
+    // 각 상품의 채널 매핑 조회
+    const masterIds = rows.map(r => r.id);
+    let channelMap = {};
+    if (masterIds.length > 0) {
+      const ph = masterIds.map(() => '?').join(',');
+      const chRows = await query(
+        `SELECT master_id, channel, channel_product_id, channel_product_name, channel_price, channel_status
+         FROM channel_products WHERE master_id IN (${ph})`,
+        masterIds
+      );
+      for (const ch of chRows) {
+        if (!channelMap[ch.master_id]) channelMap[ch.master_id] = [];
+        channelMap[ch.master_id].push(ch);
+      }
+    }
+
+    const items = rows.map(r => ({
+      ...r,
+      channels: channelMap[r.id] || [],
+    }));
+
+    res.json({ items, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/master/products/:id - 마스터 상품 상세 (채널 전체 정보)
+app.get('/api/master/products/:id', async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM master_products WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: '상품 없음' });
+    const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
+    res.json({ ...rows[0], channels });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/master/products/:id - 마스터 상품 수정
+app.put('/api/master/products/:id', async (req, res) => {
+  try {
+    const { name, brand, color, size, qty, stock_type } = req.body;
+    const sets = [];
+    const params = [];
+    if (name !== undefined) { sets.push('name = ?'); params.push(name); }
+    if (brand !== undefined) { sets.push('brand = ?'); params.push(brand); }
+    if (color !== undefined) { sets.push('color = ?'); params.push(color); }
+    if (size !== undefined) { sets.push('size = ?'); params.push(size); }
+    if (qty !== undefined) { sets.push('qty = ?, updated_at = NOW()'); params.push(qty); }
+    if (stock_type !== undefined) { sets.push('stock_type = ?'); params.push(stock_type); }
+    if (sets.length === 0) return res.status(400).json({ error: '수정할 필드 없음' });
+    params.push(req.params.id);
+    await query(`UPDATE master_products SET ${sets.join(', ')} WHERE id = ?`, params);
+    const rows = await query('SELECT * FROM master_products WHERE id = ?', [req.params.id]);
+    const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
+    res.json({ ...rows[0], channels });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/master/products/:id/link - 마스터 상품에 채널 연결
+app.post('/api/master/products/:id/link', async (req, res) => {
+  try {
+    const { channel, channel_product_id, channel_product_name, channel_option_name, channel_price, match_type } = req.body;
+    if (!channel || !channel_product_id) return res.status(400).json({ error: 'channel, channel_product_id 필수' });
+    await query(
+      `INSERT INTO channel_products (master_id, channel, channel_product_id, channel_product_name, channel_option_name, channel_price, match_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE master_id = VALUES(master_id), channel_product_name = VALUES(channel_product_name), channel_option_name = VALUES(channel_option_name), channel_price = VALUES(channel_price), match_type = VALUES(match_type), updated_at = NOW()`,
+      [req.params.id, channel, channel_product_id, channel_product_name || '', channel_option_name || '', channel_price || 0, match_type || 'manual']
+    );
+    const channels = await query('SELECT * FROM channel_products WHERE master_id = ?', [req.params.id]);
+    res.json({ success: true, channels });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/master/products/:masterId/link/:channelId - 채널 연결 해제
+app.delete('/api/master/products/:masterId/link/:channelId', async (req, res) => {
+  try {
+    await query('DELETE FROM channel_products WHERE id = ? AND master_id = ?', [req.params.channelId, req.params.masterId]);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/master/stats - 마스터 상품 통계
+app.get('/api/master/stats', async (req, res) => {
+  try {
+    const [totalRow] = await query('SELECT COUNT(*) as cnt FROM master_products');
+    const [invRow] = await query("SELECT COUNT(*) as cnt FROM master_products WHERE stock_type = 'inventory'");
+    const [srcRow] = await query("SELECT COUNT(*) as cnt FROM master_products WHERE stock_type = 'sourcing'");
+    const [linkedRow] = await query('SELECT COUNT(DISTINCT master_id) as cnt FROM channel_products');
+    const chCounts = await query('SELECT channel, COUNT(*) as cnt FROM channel_products GROUP BY channel');
+    const channelStats = {};
+    for (const r of chCounts) channelStats[r.channel] = r.cnt;
+    res.json({
+      totalProducts: totalRow.cnt,
+      inventoryProducts: invRow.cnt,
+      sourcingProducts: srcRow.cnt,
+      linkedProducts: linkedRow.cnt,
+      unlinkedProducts: totalRow.cnt - linkedRow.cnt,
+      channelStats,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/master/next-sku - 다음 품번 조회
+app.get('/api/master/next-sku', async (req, res) => {
+  try {
+    const rows = await query("SELECT sku FROM master_products ORDER BY sku DESC LIMIT 1");
+    if (rows.length === 0) return res.json({ nextSku: 'BF-0001' });
+    const lastNum = parseInt(rows[0].sku.replace('BF-', ''), 10);
+    const nextSku = `BF-${String(lastNum + 1).padStart(4, '0')}`;
+    res.json({ nextSku });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/master/products - 마스터 상품 추가
+app.post('/api/master/products', async (req, res) => {
+  try {
+    const { name, brand, color, size, qty, stock_type, image_url } = req.body;
+    if (!name) return res.status(400).json({ error: '상품명 필수' });
+    // 다음 품번 자동 생성
+    const skuRows = await query("SELECT sku FROM master_products ORDER BY sku DESC LIMIT 1");
+    let nextNum = 1;
+    if (skuRows.length > 0) nextNum = parseInt(skuRows[0].sku.replace('BF-', ''), 10) + 1;
+    const sku = `BF-${String(nextNum).padStart(4, '0')}`;
+    const result = await query(
+      `INSERT INTO master_products (sku, name, brand, color, size, qty, stock_type, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sku, name, brand || '', color || '', size || null, qty || 0, stock_type || 'sourcing', image_url || null]
+    );
+    const rows = await query('SELECT * FROM master_products WHERE id = ?', [result.insertId]);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- API Routes ---
 
 // GET /api/health - 헬스체크 (서버 keep-alive용)

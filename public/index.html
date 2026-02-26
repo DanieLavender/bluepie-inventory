@@ -1779,6 +1779,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     상품 복사
                 </a>
+                <a href="#master" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                    상품 관리
+                </a>
 
                 <div class="nav-label" style="margin-top:16px;">시스템</div>
                 <a href="#settings" class="nav-item">
@@ -2198,6 +2202,71 @@
                 </div>
             </section>
 
+            <!-- ===== PAGE: Master Products ===== -->
+            <section class="page-section" id="page-master" style="display:none">
+                <!-- 통계 카드 -->
+                <div class="stats-grid" id="masterStats" style="margin-bottom:20px;">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#EBF5FF;color:#2563EB;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        </div>
+                        <div class="stat-value" id="masterTotalCount">-</div>
+                        <div class="stat-desc">전체 상품</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#F0FDF4;color:#16A34A;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                        </div>
+                        <div class="stat-value" id="masterInvCount">-</div>
+                        <div class="stat-desc">재고 보유</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#FFF7ED;color:#EA580C;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        </div>
+                        <div class="stat-value" id="masterSrcCount">-</div>
+                        <div class="stat-desc">사입 상품</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#FEF2F2;color:#DC2626;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                        </div>
+                        <div class="stat-value" id="masterUnlinkedCount">-</div>
+                        <div class="stat-desc">미연결</div>
+                    </div>
+                </div>
+
+                <!-- 검색/필터 -->
+                <div class="shell-card" style="margin-bottom:16px;">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <input type="text" id="masterSearch" placeholder="품번, 상품명, 컬러 검색..."
+                            style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+                        <select id="masterStockFilter" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+                            <option value="">전체 유형</option>
+                            <option value="inventory">재고 보유</option>
+                            <option value="sourcing">사입 상품</option>
+                        </select>
+                        <select id="masterChannelFilter" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+                            <option value="">전체 채널</option>
+                            <option value="naver_a">네이버 A</option>
+                            <option value="naver_b">네이버 B</option>
+                            <option value="coupang">쿠팡</option>
+                            <option value="zigzag">지그재그</option>
+                            <option value="unlinked">미연결</option>
+                        </select>
+                        <button onclick="loadMasterProducts()" class="btn btn-accent" style="padding:8px 16px;font-size:13px;">검색</button>
+                    </div>
+                </div>
+
+                <!-- 상품 목록 -->
+                <div class="shell-card">
+                    <div id="masterProductList" style="min-height:200px;">
+                        <p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:13px;">로딩 중...</p>
+                    </div>
+                    <div id="masterPagination" style="display:flex;justify-content:center;gap:8px;padding:16px 0;"></div>
+                </div>
+            </section>
+
             <!-- ===== PAGE: Settings ===== -->
             <section class="page-section" id="page-settings" style="display:none">
                 <!-- 스마트스토어 연동 -->
@@ -2561,6 +2630,7 @@
         'log': '동기화 로그',
         'brands': '브랜드 관리',
         'copy': '상품 복사',
+        'master': '상품 관리',
         'settings': '설정',
     };
 
@@ -2577,7 +2647,7 @@
         document.getElementById('loginPage').style.display = 'none';
 
         // Valid pages
-        const validPages = ['inventory', 'sales', 'log', 'brands', 'copy', 'settings'];
+        const validPages = ['inventory', 'sales', 'log', 'brands', 'copy', 'master', 'settings'];
         const page = validPages.includes(hash) ? hash : 'inventory';
 
         // Show/hide pages
@@ -2623,6 +2693,9 @@
         }
         if (page === 'copy') {
             initCopyPage();
+        }
+        if (page === 'master') {
+            initMasterPage();
         }
     }
 
@@ -5091,6 +5164,131 @@
                 indexPollTimer = null;
             }
         }, 3000);
+    }
+
+    // ===== Master Products (상품 관리) =====
+    let masterCurrentPage = 1;
+
+    const channelLabels = {
+        naver_a: { name: 'A', bg: '#03C75A', color: '#fff' },
+        naver_b: { name: 'B', bg: '#03C75A', color: '#fff' },
+        coupang: { name: '쿠팡', bg: '#E31937', color: '#fff' },
+        zigzag: { name: '지그재그', bg: '#6C2CF5', color: '#fff' },
+    };
+
+    async function initMasterPage() {
+        loadMasterStats();
+        loadMasterProducts();
+        // 엔터키 검색
+        const searchEl = document.getElementById('masterSearch');
+        if (searchEl) searchEl.onkeydown = (e) => { if (e.key === 'Enter') loadMasterProducts(); };
+    }
+
+    async function loadMasterStats() {
+        try {
+            const st = await api('/api/master/stats');
+            document.getElementById('masterTotalCount').textContent = (st.totalProducts || 0).toLocaleString();
+            document.getElementById('masterInvCount').textContent = (st.inventoryProducts || 0).toLocaleString();
+            document.getElementById('masterSrcCount').textContent = (st.sourcingProducts || 0).toLocaleString();
+            document.getElementById('masterUnlinkedCount').textContent = (st.unlinkedProducts || 0).toLocaleString();
+        } catch (e) {}
+    }
+
+    async function loadMasterProducts(page) {
+        if (page) masterCurrentPage = page;
+        else masterCurrentPage = 1;
+        const search = document.getElementById('masterSearch')?.value || '';
+        const stockType = document.getElementById('masterStockFilter')?.value || '';
+        const channel = document.getElementById('masterChannelFilter')?.value || '';
+        const params = new URLSearchParams({ page: masterCurrentPage, limit: 30 });
+        if (search) params.set('search', search);
+        if (stockType) params.set('stockType', stockType);
+        if (channel) params.set('channel', channel);
+
+        try {
+            const data = await api(`/api/master/products?${params}`);
+            renderMasterProducts(data);
+        } catch (e) {
+            document.getElementById('masterProductList').innerHTML =
+                `<p style="text-align:center;color:#E53E3E;padding:20px 0;">로드 실패: ${e.message}</p>`;
+        }
+    }
+
+    function renderMasterProducts(data) {
+        const container = document.getElementById('masterProductList');
+        if (!data.items || data.items.length === 0) {
+            container.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:13px;">상품이 없습니다</p>';
+            document.getElementById('masterPagination').innerHTML = '';
+            return;
+        }
+
+        // PC: 테이블, 모바일: 카드
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            container.innerHTML = data.items.map(item => {
+                const channelBadges = (item.channels || []).map(ch => {
+                    const l = channelLabels[ch.channel] || { name: ch.channel, bg: '#666', color: '#fff' };
+                    return `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;background:${l.bg};color:${l.color};margin-right:3px;">${l.name}</span>`;
+                }).join('');
+                const stockLabel = item.stock_type === 'inventory'
+                    ? `<span style="color:#16A34A;font-weight:600;">${item.qty}개</span>`
+                    : '<span style="color:#EA580C;font-size:11px;">사입</span>';
+                return `<div style="padding:12px 0;border-bottom:1px solid var(--border);">
+                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px;">
+                        <span style="font-size:11px;color:var(--text-tertiary);font-weight:600;">${item.sku}</span>
+                        ${stockLabel}
+                    </div>
+                    <div style="font-size:13px;font-weight:500;margin-bottom:4px;">${escapeHtml(item.name)}</div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:12px;color:var(--text-secondary);">${escapeHtml(item.color || '')}</span>
+                        <div>${channelBadges || '<span style="font-size:10px;color:var(--text-tertiary);">미연결</span>'}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            container.innerHTML = `
+                <table class="inventory-table" style="width:100%;font-size:13px;">
+                    <thead><tr>
+                        <th style="width:80px;">품번</th>
+                        <th>상품명</th>
+                        <th style="width:100px;">컬러</th>
+                        <th style="width:60px;">유형</th>
+                        <th style="width:60px;text-align:center;">재고</th>
+                        <th style="width:200px;">판매 채널</th>
+                    </tr></thead>
+                    <tbody>${data.items.map(item => {
+                        const channelBadges = (item.channels || []).map(ch => {
+                            const l = channelLabels[ch.channel] || { name: ch.channel, bg: '#666', color: '#fff' };
+                            return `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;background:${l.bg};color:${l.color};margin-right:3px;" title="${escapeHtml(ch.channel_product_name || ch.channel_product_id)}">${l.name}</span>`;
+                        }).join('');
+                        const stockLabel = item.stock_type === 'inventory'
+                            ? `<span style="font-weight:600;">${item.qty}</span>`
+                            : '<span style="color:var(--text-tertiary);">-</span>';
+                        const typeLabel = item.stock_type === 'inventory'
+                            ? '<span style="color:#16A34A;">재고</span>'
+                            : '<span style="color:#EA580C;">사입</span>';
+                        return `<tr>
+                            <td style="font-weight:600;color:var(--accent);">${item.sku}</td>
+                            <td>${escapeHtml(item.name)}</td>
+                            <td>${escapeHtml(item.color || '')}</td>
+                            <td>${typeLabel}</td>
+                            <td style="text-align:center;">${stockLabel}</td>
+                            <td>${channelBadges || '<span style="color:var(--text-tertiary);font-size:11px;">미연결</span>'}</td>
+                        </tr>`;
+                    }).join('')}</tbody>
+                </table>`;
+        }
+
+        // 페이지네이션
+        const totalPages = Math.ceil(data.total / data.limit);
+        const pagEl = document.getElementById('masterPagination');
+        if (totalPages <= 1) { pagEl.innerHTML = ''; return; }
+        let pagHtml = '';
+        if (masterCurrentPage > 1) pagHtml += `<button onclick="loadMasterProducts(${masterCurrentPage - 1})" class="btn btn-outline" style="padding:4px 10px;font-size:12px;">이전</button>`;
+        pagHtml += `<span style="font-size:12px;color:var(--text-secondary);line-height:28px;">${masterCurrentPage} / ${totalPages}</span>`;
+        if (masterCurrentPage < totalPages) pagHtml += `<button onclick="loadMasterProducts(${masterCurrentPage + 1})" class="btn btn-outline" style="padding:4px 10px;font-size:12px;">다음</button>`;
+        pagEl.innerHTML = pagHtml;
     }
 
     async function initCopyPage() {

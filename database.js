@@ -215,6 +215,121 @@ async function initDb() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // === 마스터 상품 테이블 (품번 기준 통합 관리) ===
+  await query(`
+    CREATE TABLE IF NOT EXISTS master_products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sku VARCHAR(20) UNIQUE NOT NULL,
+      name VARCHAR(500) NOT NULL,
+      brand VARCHAR(10) DEFAULT '',
+      color VARCHAR(255) DEFAULT '',
+      size VARCHAR(255) DEFAULT NULL,
+      qty INT NOT NULL DEFAULT 0,
+      stock_type ENUM('inventory', 'sourcing') DEFAULT 'sourcing',
+      image_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // === 채널별 상품 매핑 (마스터 1개 → 채널 N개) ===
+  await query(`
+    CREATE TABLE IF NOT EXISTS channel_products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      master_id INT NOT NULL,
+      channel ENUM('naver_a', 'naver_b', 'coupang', 'zigzag') NOT NULL,
+      channel_product_id VARCHAR(255) NOT NULL,
+      channel_product_name VARCHAR(500) DEFAULT '',
+      channel_option_name VARCHAR(255) DEFAULT '',
+      channel_price INT DEFAULT 0,
+      channel_status VARCHAR(50) DEFAULT '',
+      match_type ENUM('auto', 'manual', 'copy') DEFAULT 'auto',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY (channel, channel_product_id),
+      INDEX idx_master (master_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // === 마이그레이션: inventory → master_products (1회성) ===
+  const [masterMigrated] = await getPool().query(
+    "SELECT value FROM sync_config WHERE `key` = 'master_products_migrated'"
+  ).catch(() => [[]]);
+  if (!masterMigrated || masterMigrated.length === 0 || masterMigrated[0]?.value !== 'true') {
+    const invRows = await query('SELECT * FROM inventory ORDER BY id');
+    if (invRows.length > 0) {
+      const masterCount = await query('SELECT COUNT(*) as cnt FROM master_products');
+      if (masterCount[0].cnt === 0) {
+        for (let i = 0; i < invRows.length; i++) {
+          const row = invRows[i];
+          const skuNum = String(i + 1).padStart(4, '0');
+          const sku = `BF-${skuNum}`;
+          await query(
+            `INSERT IGNORE INTO master_products (sku, name, brand, color, size, qty, stock_type, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'inventory', ?, ?)`,
+            [sku, row.name, row.brand || '', row.color, row.size || null, row.qty, row.created_at, row.updated_at]
+          );
+        }
+        console.log(`[DB] master_products 마이그레이션 완료: ${invRows.length}개 (BF-0001 ~ BF-${String(invRows.length).padStart(4, '0')})`);
+      }
+    }
+
+    // 기존 channel_product_mapping → channel_products 이관
+    const cpmRows = await query('SELECT * FROM channel_product_mapping WHERE copy_status = ?', ['success']).catch(() => []);
+    for (const cpm of cpmRows) {
+      // store_a_channel_product_no → inventory.channel_product_no → master_products 연결
+      const inv = await query('SELECT * FROM inventory WHERE channel_product_no = ? LIMIT 1', [cpm.store_a_channel_product_no]).catch(() => []);
+      if (inv.length === 0) continue;
+      const master = await query('SELECT * FROM master_products WHERE name = ? AND color = ? LIMIT 1', [inv[0].name, inv[0].color]).catch(() => []);
+      if (master.length === 0) continue;
+
+      const channelMap = { storeB: 'naver_b', coupang: 'coupang', zigzag: 'zigzag' };
+      const ch = channelMap[cpm.target_channel];
+      if (!ch || !cpm.target_product_id) continue;
+
+      await query(
+        `INSERT IGNORE INTO channel_products (master_id, channel, channel_product_id, channel_product_name, match_type)
+         VALUES (?, ?, ?, ?, 'copy')`,
+        [master[0].id, ch, cpm.target_product_id, cpm.target_product_name || '']
+      ).catch(() => {});
+    }
+
+    // 기존 product_mapping → channel_products (naver_b) 이관
+    const pmRows = await query("SELECT * FROM product_mapping WHERE match_status IN ('matched', 'manual') AND store_b_channel_product_no IS NOT NULL").catch(() => []);
+    for (const pm of pmRows) {
+      const inv = await query('SELECT * FROM inventory WHERE channel_product_no = ? LIMIT 1', [pm.store_a_channel_product_no]).catch(() => []);
+      if (inv.length === 0) continue;
+      const master = await query('SELECT * FROM master_products WHERE name = ? AND color = ? LIMIT 1', [inv[0].name, inv[0].color]).catch(() => []);
+      if (master.length === 0) continue;
+
+      await query(
+        `INSERT IGNORE INTO channel_products (master_id, channel, channel_product_id, channel_product_name, channel_option_name, match_type)
+         VALUES (?, 'naver_b', ?, ?, ?, ?)`,
+        [master[0].id, pm.store_b_channel_product_no, pm.store_b_product_name || '', pm.store_b_option_name || '', pm.match_status === 'manual' ? 'manual' : 'auto']
+      ).catch(() => {});
+    }
+
+    // inventory.channel_product_no → channel_products (naver_a) 이관
+    const invLinked = await query('SELECT * FROM inventory WHERE channel_product_no IS NOT NULL AND channel_product_no != ?', ['']).catch(() => []);
+    for (const inv of invLinked) {
+      const master = await query('SELECT * FROM master_products WHERE name = ? AND color = ? LIMIT 1', [inv.name, inv.color]).catch(() => []);
+      if (master.length === 0) continue;
+      // store_a_products에서 이름/가격 가져오기
+      const sapRow = await query('SELECT * FROM store_a_products WHERE channel_product_no = ? LIMIT 1', [inv.channel_product_no]).catch(() => []);
+      await query(
+        `INSERT IGNORE INTO channel_products (master_id, channel, channel_product_id, channel_product_name, channel_price, match_type)
+         VALUES (?, 'naver_a', ?, ?, ?, 'auto')`,
+        [master[0].id, inv.channel_product_no, sapRow[0]?.name || '', sapRow[0]?.sale_price || 0]
+      ).catch(() => {});
+    }
+
+    await query(
+      "INSERT INTO sync_config (`key`, value) VALUES ('master_products_migrated', 'true') ON DUPLICATE KEY UPDATE value = 'true'"
+    );
+    const chCount = await query('SELECT COUNT(*) as cnt FROM channel_products');
+    console.log(`[DB] channel_products 이관 완료: ${chCount[0].cnt}개`);
+  }
+
   // Seed sync_config defaults
   const configDefaults = [
     ['sync_enabled', 'false'],
