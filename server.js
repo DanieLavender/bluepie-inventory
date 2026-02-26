@@ -64,7 +64,7 @@ async function checkForNewProducts() {
 async function runProductIndexing(fullRefresh = false) {
   if (indexingActive) return;
   indexingActive = true;
-  indexingProgress = { current: 0, total: 0, startedAt: new Date().toISOString() };
+  indexingProgress = { current: 0, total: 0, phase: 'collecting', startedAt: new Date().toISOString() };
 
   try {
     await initSyncClients();
@@ -108,6 +108,7 @@ async function runProductIndexing(fullRefresh = false) {
     }
 
     indexingProgress.total = newNos.length;
+    indexingProgress.phase = 'indexing';
 
     // Step 3: 1건씩 v2 조회 → DB 저장 (1초 간격, rate limit 방지)
     for (let i = 0; i < newNos.length; i++) {

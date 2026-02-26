@@ -5040,10 +5040,18 @@
 
             if (st.indexing && st.progress && progressBar) {
                 progressBar.style.display = 'block';
-                const pct = st.progress.total > 0 ? Math.round((st.progress.current / st.progress.total) * 100) : 0;
-                document.getElementById('indexProgressFill').style.width = pct + '%';
-                document.getElementById('indexProgressText').textContent =
-                    `${st.progress.current} / ${st.progress.total} (${pct}%)`;
+                const phase = st.progress.phase || 'indexing';
+                if (phase === 'collecting') {
+                    document.getElementById('indexProgressFill').style.width = '100%';
+                    document.getElementById('indexProgressFill').style.animation = 'pulse 1.5s infinite';
+                    document.getElementById('indexProgressText').textContent = '상품번호 수집 중...';
+                } else {
+                    document.getElementById('indexProgressFill').style.animation = '';
+                    const pct = st.progress.total > 0 ? Math.round((st.progress.current / st.progress.total) * 100) : 0;
+                    document.getElementById('indexProgressFill').style.width = pct + '%';
+                    document.getElementById('indexProgressText').textContent =
+                        `${st.progress.current} / ${st.progress.total} (${pct}%)`;
+                }
             } else if (progressBar) {
                 progressBar.style.display = 'none';
             }
